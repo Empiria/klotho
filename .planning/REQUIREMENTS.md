@@ -55,13 +55,13 @@
 
 ## Out of Scope
 
-- **Full TUI (lazydocker-style)** — overengineering for small team, interactive menu is enough
-- **Database for state** — containers already track state, query podman directly
-- **User authentication** — small team trust boundary, unnecessary complexity
-- **Plugin system** — premature, add agents by editing config instead
-- **GUI/Web UI** — scope creep, users are CLI-comfortable
-- **Remote container management** — SSH works, focus on local
-- **Complex dependency graphs** — keep agents independent
+- **Full TUI (lazydocker-style)** - overengineering for small team, interactive menu is enough
+- **Database for state** - containers already track state, query podman directly
+- **User authentication** - small team trust boundary, unnecessary complexity
+- **Plugin system** - premature, add agents by editing config instead
+- **GUI/Web UI** - scope creep, users are CLI-comfortable
+- **Remote container management** - SSH works, focus on local
+- **Complex dependency graphs** - keep agents independent
 
 ---
 
@@ -69,21 +69,21 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REL-01 | — | Pending |
-| REL-02 | — | Pending |
-| REL-03 | — | Pending |
-| SES-01 | — | Pending |
-| SES-02 | — | Pending |
-| SES-03 | — | Pending |
-| SES-04 | — | Pending |
-| AGT-01 | — | Pending |
-| AGT-02 | — | Pending |
-| AGT-03 | — | Pending |
-| AGT-04 | — | Pending |
-| AGT-05 | — | Pending |
-| DOC-01 | — | Pending |
-| DOC-02 | — | Pending |
-| DOC-03 | — | Pending |
+| REL-01 | Phase 1 | Pending |
+| REL-02 | Phase 1 | Pending |
+| REL-03 | Phase 1 | Pending |
+| AGT-05 | Phase 2 | Pending |
+| AGT-01 | Phase 2 | Pending |
+| AGT-02 | Phase 3 | Pending |
+| AGT-03 | Phase 3 | Pending |
+| AGT-04 | Phase 3 | Pending |
+| SES-01 | Phase 4 | Pending |
+| SES-02 | Phase 4 | Pending |
+| SES-03 | Phase 4 | Pending |
+| SES-04 | Phase 4 | Pending |
+| DOC-01 | Phase 5 | Pending |
+| DOC-02 | Phase 5 | Pending |
+| DOC-03 | Phase 5 | Pending |
 
 ---
 
