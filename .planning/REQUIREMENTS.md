@@ -1,0 +1,90 @@
+# Requirements
+
+**Project:** agent-session
+**Version:** v1
+**Last updated:** 2026-01-26
+
+## v1 Requirements
+
+### Release Readiness
+
+- [ ] **REL-01**: Codebase contains no hardcoded usernames or absolute paths specific to one machine
+- [ ] **REL-02**: No API keys, secrets, or credentials committed to repository
+- [ ] **REL-03**: Tool runs successfully on fresh container with only documented prerequisites
+
+### Session Management
+
+- [ ] **SES-01**: User can stop a running agent session
+- [ ] **SES-02**: User can restart a stopped agent session
+- [ ] **SES-03**: User can list all agent sessions with their status (running/stopped)
+- [ ] **SES-04**: User can remove old/stopped containers to clean up
+
+### Agent Support
+
+- [ ] **AGT-01**: User can run sessions with Claude Code agent
+- [ ] **AGT-02**: User can run sessions with opencode agent
+- [ ] **AGT-03**: User can select agent via interactive menu when starting session
+- [ ] **AGT-04**: User can specify agent via `--agent` flag for scripting/automation
+- [ ] **AGT-05**: Adding a new agent requires only config/Containerfile changes, not orchestration logic
+
+### Documentation
+
+- [ ] **DOC-01**: Quick start guide gets colleague to first successful command in <5 minutes
+- [ ] **DOC-02**: Installation guide lists all prerequisites with verification commands
+- [ ] **DOC-03**: Usage reference documents all commands and flags
+
+---
+
+## v2 Requirements (Deferred)
+
+### Session Management
+- Auto-restart on crash
+- Bulk operations (stop all, clean all)
+- Logs access command
+
+### Documentation
+- Troubleshooting guide
+
+### Developer Experience
+- Shell completion (bash/zsh/fish)
+- ShellCheck linting integration
+- BATS automated tests
+- CI/CD pipeline
+
+---
+
+## Out of Scope
+
+- **Full TUI (lazydocker-style)** — overengineering for small team, interactive menu is enough
+- **Database for state** — containers already track state, query podman directly
+- **User authentication** — small team trust boundary, unnecessary complexity
+- **Plugin system** — premature, add agents by editing config instead
+- **GUI/Web UI** — scope creep, users are CLI-comfortable
+- **Remote container management** — SSH works, focus on local
+- **Complex dependency graphs** — keep agents independent
+
+---
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| REL-01 | — | Pending |
+| REL-02 | — | Pending |
+| REL-03 | — | Pending |
+| SES-01 | — | Pending |
+| SES-02 | — | Pending |
+| SES-03 | — | Pending |
+| SES-04 | — | Pending |
+| AGT-01 | — | Pending |
+| AGT-02 | — | Pending |
+| AGT-03 | — | Pending |
+| AGT-04 | — | Pending |
+| AGT-05 | — | Pending |
+| DOC-01 | — | Pending |
+| DOC-02 | — | Pending |
+| DOC-03 | — | Pending |
+
+---
+
+*Requirements defined: 2026-01-26*
