@@ -165,6 +165,28 @@ validate_config() {
     return 0
 }
 
+# Prompt to build agent if image doesn't exist
+ensure_agent_built() {
+    local agent="$1"
+    local image="agent-session-${agent}:latest"
+
+    if ! podman image exists "$image" 2>/dev/null; then
+        echo ""
+        read -p "Image not built. Build now? [y/N] " answer
+        answer="${answer:-N}"
+        if [[ "$answer" =~ ^[Yy]$ ]]; then
+            echo "Building ${agent}..."
+            ./scripts/build.sh "$agent" || {
+                echo "error: build failed" >&2
+                exit 1
+            }
+        else
+            echo "Cannot start session without built image."
+            exit 1
+        fi
+    fi
+}
+
 # Load agent config with XDG-style layering
 load_agent_config() {
     local agent="$1"
@@ -199,6 +221,9 @@ fi
 
 # Load agent config (uses AGENT_TYPE set by flag or menu)
 load_agent_config "$AGENT_TYPE" || exit 1
+
+# Ensure image is built
+ensure_agent_built "$AGENT_TYPE"
 
 CONTAINER_NAME="agent-${SESSION_NAME}"
 IMAGE_NAME="agent-session-${AGENT_TYPE}:latest"
