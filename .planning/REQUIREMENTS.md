@@ -22,9 +22,9 @@
 ### Agent Support
 
 - [ ] **AGT-01**: User can run sessions with Claude Code agent
-- [ ] **AGT-02**: User can run sessions with opencode agent
-- [ ] **AGT-03**: User can select agent via interactive menu when starting session
-- [ ] **AGT-04**: User can specify agent via `--agent` flag for scripting/automation
+- [x] **AGT-02**: User can run sessions with opencode agent
+- [x] **AGT-03**: User can select agent via interactive menu when starting session
+- [x] **AGT-04**: User can specify agent via `--agent` flag for scripting/automation
 - [ ] **AGT-05**: Adding a new agent requires only config/Containerfile changes, not orchestration logic
 
 ### Documentation
@@ -74,9 +74,9 @@
 | REL-03 | Phase 1 | Complete |
 | AGT-05 | Phase 2 | Complete |
 | AGT-01 | Phase 2 | Complete |
-| AGT-02 | Phase 3 | Pending |
-| AGT-03 | Phase 3 | Pending |
-| AGT-04 | Phase 3 | Pending |
+| AGT-02 | Phase 3 | Complete |
+| AGT-03 | Phase 3 | Complete |
+| AGT-04 | Phase 3 | Complete |
 | SES-01 | Phase 4 | Pending |
 | SES-02 | Phase 4 | Pending |
 | SES-03 | Phase 4 | Pending |
