@@ -26,13 +26,18 @@ fi
 # Copy mounted configs to home directory (allows writes, fixes permissions)
 [[ -d /config/zellij ]] && mkdir -p ~/.config && cp -r /config/zellij ~/.config/
 
-# Install GSD plugin if not present
-if [[ ! -f ~/.claude/get-shit-done/VERSION ]]; then
+# Install GSD plugin if Claude and not already present
+if command -v claude &>/dev/null && [[ ! -f ~/.claude/get-shit-done/VERSION ]]; then
     echo "Installing get-shit-done..."
     npx -y get-shit-done-cc@latest --claude --global
 fi
 
-echo "Claude Code $(claude --version) ready"
+# Print agent version if available
+if command -v claude &>/dev/null; then
+    echo "Claude Code $(claude --version) ready"
+else
+    echo "Agent environment ready"
+fi
 
 # Restore working directory and exec
 cd "$WORKDIR"
