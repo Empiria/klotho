@@ -3,11 +3,12 @@ set -euo pipefail
 
 show_help() {
     cat << 'EOF'
-Usage: agent-session [-n NAME] [project-paths...]
+Usage: agent-session [-a AGENT] [-n NAME] [project-paths...]
 
-Run Claude Code in an isolated container with persistent Zellij sessions.
+Run AI agents in isolated containers with persistent Zellij sessions.
 
 Options:
+  -a, --agent AGENT  Agent to use (default: "claude")
   -n, --name NAME    Session name (default: "default")
   -h, --help         Show this help message
 
@@ -17,6 +18,7 @@ Examples:
   agent-session -n frontend ~/projects/webapp   # named session "frontend"
   agent-session -n backend ~/api ~/libs         # multiple repos in one session
   agent-session -n frontend                     # reattach to existing session
+  agent-session -a claude -n test ~/project     # explicit agent selection
 
 Session lifecycle:
   Sessions run in the background and persist across terminal disconnects.
@@ -26,9 +28,6 @@ Session lifecycle:
   podman ps --filter "name=agent-"                 # list running sessions
   podman stop agent-NAME && podman rm agent-NAME   # permanently stop a session
 
-Inside the container:
-  claude --dangerously-skip-permissions         # run claude with full access
-
 Environment variables:
   AGENT_SESSION_MOUNTS    Extra host paths to mount (colon-separated)
                           Paths are mounted at the same location in container.
@@ -36,6 +35,7 @@ Environment variables:
 EOF
 }
 
+AGENT_TYPE="claude"
 SESSION_NAME="default"
 PATHS=()
 
@@ -45,6 +45,16 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             show_help
             exit 0
+            ;;
+        -a|--agent)
+            if [[ -z "${2:-}" || "$2" == -* ]]; then
+                echo "error: -a/--agent requires an agent name" >&2
+                echo >&2
+                show_help >&2
+                exit 1
+            fi
+            AGENT_TYPE="$2"
+            shift 2
             ;;
         -n|--name)
             if [[ -z "${2:-}" || "$2" == -* ]]; then
@@ -69,7 +79,57 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Validate config file format - reject command substitution
+validate_config() {
+    local config_file="$1"
+
+    # Check file exists and is readable
+    if [[ ! -f "$config_file" ]] || [[ ! -r "$config_file" ]]; then
+        echo "error: config file not found or not readable: $config_file" >&2
+        return 1
+    fi
+
+    # Reject command substitution which would execute during sourcing
+    if grep -qE '`|\$\(' "$config_file"; then
+        echo "error: config contains command substitution (\$() or backticks)" >&2
+        echo "config files may only contain KEY=value pairs and variable expansion (\$VAR)" >&2
+        return 1
+    fi
+
+    return 0
+}
+
+# Load agent config with XDG-style layering
+load_agent_config() {
+    local agent="$1"
+    local config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+    local user_config="$config_home/agent-session/agents/$agent/config.conf"
+    local repo_config="./config/agents/$agent/config.conf"
+
+    # Load repo default first (must exist)
+    if [[ ! -f "$repo_config" ]]; then
+        echo "error: no default config found for agent: $agent" >&2
+        echo "expected: $repo_config" >&2
+        return 1
+    fi
+
+    validate_config "$repo_config" || return 1
+    source "$repo_config"
+
+    # Override with user config if present
+    if [[ -f "$user_config" ]]; then
+        validate_config "$user_config" || return 1
+        source "$user_config"
+    fi
+
+    return 0
+}
+
+# Load agent config
+load_agent_config "$AGENT_TYPE" || exit 1
+
 CONTAINER_NAME="agent-${SESSION_NAME}"
+IMAGE_NAME="agent-session-${AGENT_TYPE}:latest"
 
 # Helper to attach or create zellij session
 attach_zellij() {
@@ -77,8 +137,8 @@ attach_zellij() {
     if podman exec "$CONTAINER_NAME" zellij list-sessions 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -q "^$SESSION_NAME "; then
         podman exec -it "$CONTAINER_NAME" zellij attach "$SESSION_NAME"
     else
-        # Start new session with claude-session as the shell (runs claude, then drops to fish)
-        podman exec -it -e SHELL=/home/agent/.local/bin/claude-session "$CONTAINER_NAME" zellij -s "$SESSION_NAME"
+        # Start new session with agent wrapper as the shell (runs agent, then drops to configured shell)
+        podman exec -it -e SHELL=/home/agent/.local/bin/claude-session -e AGENT_LAUNCH_CMD="$AGENT_LAUNCH_CMD" "$CONTAINER_NAME" zellij -s "$SESSION_NAME"
     fi
 }
 
@@ -149,7 +209,7 @@ podman run -d \
     $OPTIONAL_MOUNTS \
     $EXTRA_MOUNTS \
     $MOUNTS \
-    claude-agent \
+    "$IMAGE_NAME" \
     bash -c 'trap "exit 0" TERM; while :; do sleep 1; done'
 
 # Wait for container to be ready
