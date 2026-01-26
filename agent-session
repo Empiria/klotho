@@ -1,0 +1,154 @@
+#!/bin/bash
+set -euo pipefail
+
+show_help() {
+    cat << 'EOF'
+Usage: agent-session [-n NAME] [project-paths...]
+
+Run Claude Code in an isolated container with persistent Zellij sessions.
+
+Options:
+  -n, --name NAME    Session name (default: "default")
+  -h, --help         Show this help message
+
+Examples:
+  agent-session                                  # new session with current dir
+  agent-session ~/projects/repo-a               # new session with specific project
+  agent-session -n frontend ~/projects/webapp   # named session "frontend"
+  agent-session -n backend ~/api ~/libs         # multiple repos in one session
+  agent-session -n frontend                     # reattach to existing session
+
+Session lifecycle:
+  Sessions run in the background and persist across terminal disconnects.
+  Close terminal or Ctrl+C to detach - session keeps running.
+  Run agent-session with same name to reattach.
+
+  podman ps --filter "name=agent-"                 # list running sessions
+  podman stop agent-NAME && podman rm agent-NAME   # permanently stop a session
+
+Inside the container:
+  claude --dangerously-skip-permissions         # run claude with full access
+
+Environment variables:
+  AGENT_SESSION_MOUNTS    Extra host paths to mount (colon-separated)
+                          Paths are mounted at the same location in container.
+                          Example: AGENT_SESSION_MOUNTS="$HOME/dotfiles:$HOME/scripts"
+EOF
+}
+
+SESSION_NAME="default"
+PATHS=()
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -n|--name)
+            if [[ -z "${2:-}" || "$2" == -* ]]; then
+                echo "error: -n/--name requires a session name" >&2
+                echo >&2
+                show_help >&2
+                exit 1
+            fi
+            SESSION_NAME="$2"
+            shift 2
+            ;;
+        -*)
+            echo "error: unknown option: $1" >&2
+            echo >&2
+            show_help >&2
+            exit 1
+            ;;
+        *)
+            PATHS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+CONTAINER_NAME="agent-${SESSION_NAME}"
+
+# Helper to attach or create zellij session
+attach_zellij() {
+    # Strip ANSI color codes when checking for existing sessions
+    if podman exec "$CONTAINER_NAME" zellij list-sessions 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -q "^$SESSION_NAME "; then
+        podman exec -it "$CONTAINER_NAME" zellij attach "$SESSION_NAME"
+    else
+        # Start new session with claude-session as the shell (runs claude, then drops to fish)
+        podman exec -it -e SHELL=/home/agent/.local/bin/claude-session "$CONTAINER_NAME" zellij -s "$SESSION_NAME"
+    fi
+}
+
+# Check if container exists and is running
+if podman ps --format "{{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
+    echo "Attaching to '$SESSION_NAME'..."
+    attach_zellij
+    exit 0
+fi
+
+# Check if container exists but stopped
+if podman ps -a --format "{{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
+    echo "Starting '$SESSION_NAME'..."
+    podman start "$CONTAINER_NAME"
+    sleep 1  # Wait for container to be ready
+    attach_zellij
+    exit 0
+fi
+
+# Need paths to create a new session
+if [ ${#PATHS[@]} -eq 0 ]; then
+    PATHS=("$(pwd)")
+fi
+
+# Validate paths exist
+for path in "${PATHS[@]}"; do
+    if [[ ! -e "$path" ]]; then
+        echo "error: path does not exist: $path" >&2
+        exit 1
+    fi
+done
+
+# Build mount arguments from provided paths
+MOUNTS=""
+FIRST_DIR=""
+for path in "${PATHS[@]}"; do
+    abs_path=$(realpath "$path")
+    dir_name=$(basename "$abs_path")
+    MOUNTS="$MOUNTS -v $abs_path:/workspace/$dir_name:Z"
+    [[ -z "$FIRST_DIR" ]] && FIRST_DIR="/workspace/$dir_name"
+done
+
+# Build extra mounts from AGENT_SESSION_MOUNTS env var
+EXTRA_MOUNTS=""
+if [[ -n "${AGENT_SESSION_MOUNTS:-}" ]]; then
+    IFS=':' read -ra MOUNT_PATHS <<< "$AGENT_SESSION_MOUNTS"
+    for mount_path in "${MOUNT_PATHS[@]}"; do
+        if [[ -e "$mount_path" ]]; then
+            EXTRA_MOUNTS="$EXTRA_MOUNTS -v $mount_path:$mount_path:ro"
+        else
+            echo "warning: AGENT_SESSION_MOUNTS path does not exist: $mount_path" >&2
+        fi
+    done
+fi
+
+
+echo "Starting new session '$SESSION_NAME'..."
+podman run -d \
+    --name "$CONTAINER_NAME" \
+    --userns=keep-id \
+    --workdir "$FIRST_DIR" \
+    -v "$HOME/.claude:/config/.claude:Z" \
+    -v "$HOME/.claude.json:/home/agent/.claude.json:Z" \
+    -v "$HOME/.local/share/claude:/home/agent/.local/share/claude:Z" \
+    -v "$HOME/.config/zellij:/config/zellij:ro" \
+    $EXTRA_MOUNTS \
+    $MOUNTS \
+    claude-agent \
+    bash -c 'trap "exit 0" TERM; while :; do sleep 1; done'
+
+# Wait for container to be ready
+sleep 1
+attach_zellij
