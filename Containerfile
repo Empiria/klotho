@@ -1,6 +1,7 @@
-FROM --platform=linux/amd64 debian:bookworm-slim
+# ===== BASE STAGE (shared by all agents) =====
+FROM --platform=linux/amd64 debian:bookworm-slim AS base
 
-# Install essentials
+# Install common tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     git \
@@ -17,13 +18,13 @@ RUN curl -sSL https://github.com/zellij-org/zellij/releases/latest/download/zell
 # Install Starship prompt
 RUN curl -sSL https://starship.rs/install.sh | sh -s -- -y
 
-# Create non-root user with zsh (UID 1000 to match typical host user)
+# Create non-root user with fish (UID 1000 to match typical host user)
 RUN useradd -m -s /usr/bin/fish -u 1000 agent
 
 # Entrypoint handles config setup
 COPY --chmod=755 entrypoint.sh /entrypoint.sh
 
-# Install tools as agent user
+# Switch to agent user for remaining setup
 USER agent
 
 # Ensure ~/.local/bin exists (native installers use this)
@@ -35,22 +36,33 @@ RUN mkdir -p ~/.config/fish && printf '%s\n' \
     'starship init fish | source' \
     > ~/.config/fish/config.fish
 
-# Create claude wrapper script (starts claude, drops to fish on exit)
-RUN printf '%s\n' \
-    '#!/usr/bin/env fish' \
-    'claude --dangerously-skip-permissions' \
-    'exec fish' \
-    > ~/.local/bin/claude-session && chmod +x ~/.local/bin/claude-session
-
-# Install uv (provides uvx for Python MCP servers)
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install Claude Code using native installer
-RUN curl -fsSL https://claude.ai/install.sh | bash
-
+# Set common environment
 ENV PATH="/home/agent/.local/bin:$PATH"
-ENV SHELL="/usr/bin/fish"
 
 WORKDIR /workspace
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["zellij"]
+
+# ===== CLAUDE AGENT STAGE =====
+FROM base AS claude
+
+# Accept build args for config values
+ARG AGENT_INSTALL_CMD
+ARG AGENT_SHELL
+ARG AGENT_LAUNCH_CMD
+
+# Install uv (provides uvx for Python MCP servers)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install Claude Code using config value
+RUN eval "$AGENT_INSTALL_CMD"
+
+# Create claude wrapper script using AGENT_LAUNCH_CMD
+RUN printf '%s\n' \
+    '#!/usr/bin/env fish' \
+    "$AGENT_LAUNCH_CMD" \
+    'exec fish' \
+    > ~/.local/bin/claude-session && chmod +x ~/.local/bin/claude-session
+
+# Set environment from config
+ENV SHELL="$AGENT_SHELL"
