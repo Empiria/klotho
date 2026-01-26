@@ -13,7 +13,7 @@ Transform a personal tool into a team-ready containerized agent environment. The
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Release Audit** - Remove personal assumptions and security risks
-- [ ] **Phase 2: Agent Abstraction** - Extract agent definitions into config-driven architecture
+- [x] **Phase 2: Agent Abstraction** - Extract agent definitions into config-driven architecture
 - [ ] **Phase 3: Multi-Agent Support** - Add OpenCode and interactive agent selection
 - [ ] **Phase 4: Session Management** - Essential container lifecycle commands
 - [ ] **Phase 5: Documentation** - Quick start guide and usage reference
@@ -52,7 +52,7 @@ Plans:
 - [x] 02-01-PLAN.md — Create agent config format and Claude config file
 - [x] 02-02-PLAN.md — Multi-stage Containerfile and config-driven build script
 - [x] 02-03-PLAN.md — Update orchestration and verify end-to-end functionality
-- [ ] 02-04-PLAN.md — Gap closure: dynamic wrapper names and config cleanup
+- [x] 02-04-PLAN.md — Gap closure: dynamic wrapper names and config cleanup
 
 ### Phase 3: Multi-Agent Support
 **Goal**: Users can select and run multiple agent types interactively or via flags
@@ -107,7 +107,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Release Audit | 3/3 | Complete | 2026-01-26 |
-| 2. Agent Abstraction | 3/4 | Gap closure | - |
+| 2. Agent Abstraction | 4/4 | Complete | 2026-01-26 |
 | 3. Multi-Agent Support | 0/TBD | Not started | - |
 | 4. Session Management | 0/TBD | Not started | - |
 | 5. Documentation | 0/TBD | Not started | - |

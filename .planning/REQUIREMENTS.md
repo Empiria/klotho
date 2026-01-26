@@ -72,8 +72,8 @@
 | REL-01 | Phase 1 | Complete |
 | REL-02 | Phase 1 | Complete |
 | REL-03 | Phase 1 | Complete |
-| AGT-05 | Phase 2 | Pending |
-| AGT-01 | Phase 2 | Pending |
+| AGT-05 | Phase 2 | Complete |
+| AGT-01 | Phase 2 | Complete |
 | AGT-02 | Phase 3 | Pending |
 | AGT-03 | Phase 3 | Pending |
 | AGT-04 | Phase 3 | Pending |
