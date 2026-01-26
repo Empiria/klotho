@@ -126,6 +126,7 @@ main() {
 
     podman build \
         --target="$AGENT_NAME" \
+        --build-arg AGENT_NAME="$AGENT_NAME" \
         --build-arg AGENT_INSTALL_CMD="$AGENT_INSTALL_CMD" \
         --build-arg AGENT_SHELL="$AGENT_SHELL" \
         --build-arg AGENT_LAUNCH_CMD="$AGENT_LAUNCH_CMD" \

@@ -138,7 +138,7 @@ attach_zellij() {
         podman exec -it "$CONTAINER_NAME" zellij attach "$SESSION_NAME"
     else
         # Start new session with agent wrapper as the shell (runs agent, then drops to configured shell)
-        podman exec -it -e SHELL=/home/agent/.local/bin/claude-session -e AGENT_LAUNCH_CMD="$AGENT_LAUNCH_CMD" "$CONTAINER_NAME" zellij -s "$SESSION_NAME"
+        podman exec -it -e SHELL=/home/agent/.local/bin/${AGENT_NAME}-session -e AGENT_LAUNCH_CMD="$AGENT_LAUNCH_CMD" "$CONTAINER_NAME" zellij -s "$SESSION_NAME"
     fi
 }
 
