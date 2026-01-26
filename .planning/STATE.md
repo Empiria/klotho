@@ -10,29 +10,29 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Phase: 2 of 5 (Agent Abstraction)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-01-26 - Completed 02-02-PLAN.md (Multi-Stage Container Build)
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-01-26 - Completed 02-03-PLAN.md (Config-Driven Orchestration)
 
-Progress: [██░░░░░░░░] ~25%
+Progress: [██████████] 100% (Phase 2 complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
-- Average duration: 4 min
-- Total execution time: 0.37 hours
+- Total plans completed: 6
+- Average duration: 3.3 min
+- Total execution time: 0.40 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-release-audit | 3 | 18min | 6min |
-| 02-agent-abstraction | 2 | 5min | 2.5min |
+| 02-agent-abstraction | 3 | 6min | 2min |
 
 **Recent Trend:**
-- Last 5 plans: 01-03 (1min), 02-01 (2min), 02-02 (3min)
-- Trend: Infrastructure tasks are fast due to cached builds
+- Last 5 plans: 02-01 (2min), 02-02 (3min), 02-03 (1min)
+- Trend: Infrastructure tasks are fast due to cached builds and focused scope
 
 *Updated after each plan completion*
 
@@ -57,6 +57,10 @@ Recent decisions affecting current work:
 | 02-02 | Reject only command substitution in config validation | Pipes/semicolons in quoted strings are safe during sourcing; only $() and backticks execute |
 | 02-02 | Install uv in claude stage, not base | Agent-specific tooling (Python MCP servers) doesn't belong in shared base stage |
 | 02-02 | Declare ARGs only in agent stages | Keep base stage parameter-free for better caching and cleaner separation |
+| 02-03 | Default --agent to "claude" for backward compatibility | Existing usage patterns should continue working without requiring new flags |
+| 02-03 | Use agent-session-<agent>:latest image naming pattern | Consistent naming across all agents, makes agent type clear from image name |
+| 02-03 | Merge mounted .claude config rather than replace | Claude Code creates ~/.claude during build; merging allows both container and user configs to coexist |
+| 02-03 | Agent detection for conditional behavior in entrypoint | Enables agent-agnostic base with nice agent-specific experiences via detection |
 
 ### Pending Todos
 
@@ -72,6 +76,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-01-26 16:03:48 UTC
-Stopped at: Completed 02-02-PLAN.md (Multi-Stage Container Build)
+Last session: 2026-01-26 16:29:42 UTC
+Stopped at: Completed 02-03-PLAN.md (Config-Driven Orchestration) - Phase 2 complete
 Resume file: None
