@@ -67,3 +67,28 @@ RUN printf '%s\n' \
 
 # Set environment from config
 ENV SHELL="$AGENT_SHELL"
+
+# ===== OPENCODE AGENT STAGE =====
+FROM base AS opencode
+
+# Accept build args for config values
+ARG AGENT_NAME
+ARG AGENT_INSTALL_CMD
+ARG AGENT_SHELL
+ARG AGENT_LAUNCH_CMD
+
+# Install uv (provides uvx for Python MCP servers)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install OpenCode using config value
+RUN eval "$AGENT_INSTALL_CMD"
+
+# Create agent wrapper script using AGENT_LAUNCH_CMD
+RUN printf '%s\n' \
+    '#!/usr/bin/env fish' \
+    "$AGENT_LAUNCH_CMD" \
+    'exec fish' \
+    > ~/.local/bin/${AGENT_NAME}-session && chmod +x ~/.local/bin/${AGENT_NAME}-session
+
+# Set environment from config
+ENV SHELL="$AGENT_SHELL"
