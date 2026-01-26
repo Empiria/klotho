@@ -6,19 +6,25 @@ WORKDIR="$(pwd)"
 
 # Set up ~/.claude from mounted /config/.claude
 # Symlink valid items, create directories for broken symlinks
-if [[ -d /config/.claude && ! -d ~/.claude ]]; then
+# Note: ~/.claude may already exist from image build, so we merge rather than replace
+if [[ -d /config/.claude ]]; then
     mkdir -p ~/.claude
     for item in /config/.claude/* /config/.claude/.*; do
         [[ "$(basename "$item")" == "." || "$(basename "$item")" == ".." ]] && continue
         [[ ! -e "$item" && ! -L "$item" ]] && continue
 
         name=$(basename "$item")
+        target=~/.claude/"$name"
+
+        # Skip if target already exists (prefer container version for runtime dirs)
+        [[ -e "$target" || -L "$target" ]] && continue
+
         if [[ -L "$item" && ! -e "$item" ]]; then
             # Broken symlink - create directory instead
-            mkdir -p ~/.claude/"$name"
+            mkdir -p "$target"
         else
             # Valid file/dir/symlink - symlink to mounted version
-            ln -s /config/.claude/"$name" ~/.claude/"$name"
+            ln -s /config/.claude/"$name" "$target"
         fi
     done
 fi
