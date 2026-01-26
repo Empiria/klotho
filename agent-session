@@ -35,7 +35,72 @@ Environment variables:
 EOF
 }
 
+# Discover available agents from config directories
+discover_agents() {
+    mapfile -t agents < <(
+        find ./config/agents -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null \
+        | LC_COLLATE=C sort
+    )
+
+    if [ ${#agents[@]} -eq 0 ]; then
+        echo "error: no agents found in config/agents/" >&2
+        exit 1
+    fi
+}
+
+# Check if agent image is built
+agent_is_built() {
+    local agent="$1"
+    podman image exists "agent-session-${agent}:latest" 2>/dev/null
+}
+
+# Get agent display name with build status
+agent_display() {
+    local agent="$1"
+    local name="${agent^}"  # Capitalize first letter
+    if agent_is_built "$agent"; then
+        echo "$name (ready)"
+    else
+        echo "$name (not built)"
+    fi
+}
+
+# Show interactive agent selection menu
+# Sets global AGENT_TYPE variable based on user selection
+select_agent_interactive() {
+    discover_agents
+
+    # Skip menu if only one agent
+    if [ ${#agents[@]} -eq 1 ]; then
+        AGENT_TYPE="${agents[0]}"
+        return
+    fi
+
+    echo "Available agents:"
+    local i=1
+    for agent in "${agents[@]}"; do
+        echo "  $i. $(agent_display "$agent")"
+        ((i++))
+    done
+    echo ""
+
+    PS3="Select agent (default: ${agents[0]}): "
+    select choice in "${agents[@]}"; do
+        if [[ -z "$REPLY" ]]; then
+            # Empty input = default (first in list)
+            AGENT_TYPE="${agents[0]}"
+            break
+        elif [[ -n "$choice" ]]; then
+            AGENT_TYPE="$choice"
+            break
+        else
+            echo "Invalid selection. Enter a number 1-${#agents[@]} or press Enter for default."
+        fi
+    done
+}
+
 AGENT_TYPE="claude"
+AGENT_SPECIFIED="false"
 SESSION_NAME="default"
 PATHS=()
 
@@ -54,6 +119,7 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             AGENT_TYPE="$2"
+            AGENT_SPECIFIED="true"
             shift 2
             ;;
         -n|--name)
@@ -125,7 +191,13 @@ load_agent_config() {
     return 0
 }
 
-# Load agent config
+# If no agent specified via flag, show interactive menu
+# This sets AGENT_TYPE before load_agent_config is called
+if [[ "$AGENT_SPECIFIED" != "true" ]]; then
+    select_agent_interactive
+fi
+
+# Load agent config (uses AGENT_TYPE set by flag or menu)
 load_agent_config "$AGENT_TYPE" || exit 1
 
 CONTAINER_NAME="agent-${SESSION_NAME}"
