@@ -25,7 +25,6 @@ Each agent config must define these fields:
 | `AGENT_INSTALL_CMD` | Command | Shell command to install the agent in the container (runs as agent user during build) |
 | `AGENT_LAUNCH_CMD` | Command | Shell command to start the agent in an interactive session |
 | `AGENT_SHELL` | Path | Full path to the agent's default shell (e.g., `/usr/bin/fish`, `/bin/bash`) |
-| `AGENT_REQUIRED_MOUNTS` | Space-separated paths | Mount points that must exist for the agent to function |
 | `AGENT_ENV_VARS` | Space-separated KEY=value | Environment variables to set in the container runtime |
 
 ## Config Format
@@ -47,7 +46,6 @@ AGENT_DESCRIPTION="Anthropic Claude Code agent"
 AGENT_INSTALL_CMD="curl -fsSL https://claude.ai/install.sh | bash"
 AGENT_LAUNCH_CMD="claude --dangerously-skip-permissions"
 AGENT_SHELL="/usr/bin/fish"
-AGENT_REQUIRED_MOUNTS="/workspace /config/.claude /config/zellij"
 AGENT_ENV_VARS="PATH=/home/agent/.local/bin:\$PATH SHELL=/usr/bin/fish"
 ```
 
