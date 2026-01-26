@@ -12,7 +12,7 @@ Transform a personal tool into a team-ready containerized agent environment. The
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Release Audit** - Remove personal assumptions and security risks
+- [x] **Phase 1: Release Audit** - Remove personal assumptions and security risks
 - [ ] **Phase 2: Agent Abstraction** - Extract agent definitions into config-driven architecture
 - [ ] **Phase 3: Multi-Agent Support** - Add OpenCode and interactive agent selection
 - [ ] **Phase 4: Session Management** - Essential container lifecycle commands
@@ -34,7 +34,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 - [x] 01-01-PLAN.md — Security and portability audit (Gitleaks, ShellCheck)
 - [x] 01-02-PLAN.md — Fresh environment verification and PREREQUISITES.md
-- [ ] 01-03-PLAN.md — Gap closure: conditional mounting of optional directories
+- [x] 01-03-PLAN.md — Gap closure: conditional mounting of optional directories
 
 ### Phase 2: Agent Abstraction
 **Goal**: Agent definitions are config-driven, enabling easy addition of new agents
@@ -103,7 +103,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Release Audit | 2/3 | Gap closure needed | - |
+| 1. Release Audit | 3/3 | ✓ Complete | 2026-01-26 |
 | 2. Agent Abstraction | 0/TBD | Not started | - |
 | 3. Multi-Agent Support | 0/TBD | Not started | - |
 | 4. Session Management | 0/TBD | Not started | - |
