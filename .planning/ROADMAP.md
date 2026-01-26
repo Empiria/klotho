@@ -29,11 +29,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. No API keys, secrets, or credentials exist in repository
   3. Tool runs successfully on fresh Debian container with only documented prerequisites
   4. All environment assumptions are documented with verification commands
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Security and portability audit (Gitleaks, ShellCheck)
-- [ ] 01-02-PLAN.md — Fresh environment verification and PREREQUISITES.md
+- [x] 01-01-PLAN.md — Security and portability audit (Gitleaks, ShellCheck)
+- [x] 01-02-PLAN.md — Fresh environment verification and PREREQUISITES.md
+- [ ] 01-03-PLAN.md — Gap closure: conditional mounting of optional directories
 
 ### Phase 2: Agent Abstraction
 **Goal**: Agent definitions are config-driven, enabling easy addition of new agents
@@ -98,11 +99,11 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Release Audit | 0/2 | Planned | - |
+| 1. Release Audit | 2/3 | Gap closure needed | - |
 | 2. Agent Abstraction | 0/TBD | Not started | - |
 | 3. Multi-Agent Support | 0/TBD | Not started | - |
 | 4. Session Management | 0/TBD | Not started | - |
