@@ -46,10 +46,12 @@ Plans:
   3. Containerfile uses multi-stage builds with base stage and agent-specific stages
   4. Adding a new agent requires only config file and Containerfile stage, not orchestration logic changes
   5. User can run Claude sessions using the abstracted architecture (no regression)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] TBD
+- [ ] 02-01-PLAN.md — Create agent config format and Claude config file
+- [ ] 02-02-PLAN.md — Multi-stage Containerfile and config-driven build script
+- [ ] 02-03-PLAN.md — Update orchestration and verify end-to-end functionality
 
 ### Phase 3: Multi-Agent Support
 **Goal**: Users can select and run multiple agent types interactively or via flags
@@ -104,7 +106,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Release Audit | 3/3 | ✓ Complete | 2026-01-26 |
-| 2. Agent Abstraction | 0/TBD | Not started | - |
+| 2. Agent Abstraction | 0/3 | Not started | - |
 | 3. Multi-Agent Support | 0/TBD | Not started | - |
 | 4. Session Management | 0/TBD | Not started | - |
 | 5. Documentation | 0/TBD | Not started | - |
