@@ -69,6 +69,8 @@ Recent decisions affecting current work:
 | 03-02 | Skip menu if only one agent configured | Streamlined UX when no choice is needed |
 | 03-02 | Prompt to build before starting session | Better UX than cryptic podman error when image missing |
 | 03-02 | Default No for build prompt | Safe default requiring explicit opt-in to trigger build |
+| 03-01 | OpenCode MCP config excludes GSD | Uncertain GSD compatibility with OpenCode per research; can add later if needed |
+| 03-01 | Follow exact Claude pattern for OpenCode stage | Consistency over optimization for second agent proving abstraction |
 
 ### Pending Todos
 
@@ -84,6 +86,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-01-26 17:48:00 UTC
-Stopped at: Completed 03-02-PLAN.md (Interactive Agent Selection)
+Last session: 2026-01-26 17:50:34 UTC
+Stopped at: Completed 03-01-PLAN.md (OpenCode Agent Definition) - verified after 03-02
 Resume file: None
