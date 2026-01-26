@@ -10,29 +10,29 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Phase: 2 of 5 (Agent Abstraction)
-Plan: 1 of TBD in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-01-26 - Completed 02-01-PLAN.md (Agent Config Format)
+Last activity: 2026-01-26 - Completed 02-02-PLAN.md (Multi-Stage Container Build)
 
-Progress: [██░░░░░░░░] ~20%
+Progress: [██░░░░░░░░] ~25%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 5 min
-- Total execution time: 0.33 hours
+- Total plans completed: 5
+- Average duration: 4 min
+- Total execution time: 0.37 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-release-audit | 3 | 18min | 6min |
-| 02-agent-abstraction | 1 | 2min | 2min |
+| 02-agent-abstraction | 2 | 5min | 2.5min |
 
 **Recent Trend:**
-- Last 5 plans: 01-02 (15min), 01-03 (1min), 02-01 (2min)
-- Trend: Config and docs tasks very fast
+- Last 5 plans: 01-03 (1min), 02-01 (2min), 02-02 (3min)
+- Trend: Infrastructure tasks are fast due to cached builds
 
 *Updated after each plan completion*
 
@@ -54,6 +54,9 @@ Recent decisions affecting current work:
 | 02-01 | Shell-sourceable KEY=value format for agent configs | Simple, portable, easy to parse and validate, idiomatic for shell scripts |
 | 02-01 | No command substitution allowed in configs | Security requirement to prevent code injection via config files |
 | 02-01 | XDG override path at ~/.config/agent-session/agents/ | Standard Linux convention, allows user customization without modifying repository |
+| 02-02 | Reject only command substitution in config validation | Pipes/semicolons in quoted strings are safe during sourcing; only $() and backticks execute |
+| 02-02 | Install uv in claude stage, not base | Agent-specific tooling (Python MCP servers) doesn't belong in shared base stage |
+| 02-02 | Declare ARGs only in agent stages | Keep base stage parameter-free for better caching and cleaner separation |
 
 ### Pending Todos
 
@@ -69,6 +72,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-01-26 15:58:40 UTC
-Stopped at: Completed 02-01-PLAN.md (Agent Config Format)
+Last session: 2026-01-26 16:03:48 UTC
+Stopped at: Completed 02-02-PLAN.md (Multi-Stage Container Build)
 Resume file: None
