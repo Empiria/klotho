@@ -295,7 +295,16 @@ fi
 OPTIONAL_MOUNTS=""
 [[ -d "$HOME/.claude" ]] && OPTIONAL_MOUNTS="$OPTIONAL_MOUNTS -v $HOME/.claude:/config/.claude:Z"
 [[ -d "$HOME/.local/share/claude" ]] && OPTIONAL_MOUNTS="$OPTIONAL_MOUNTS -v $HOME/.local/share/claude:/home/agent/.local/share/claude:Z"
+[[ -d "$HOME/.config/opencode" ]] && OPTIONAL_MOUNTS="$OPTIONAL_MOUNTS -v $HOME/.config/opencode:/config/opencode:Z"
+[[ -d "$HOME/.local/share/opencode" ]] && OPTIONAL_MOUNTS="$OPTIONAL_MOUNTS -v $HOME/.local/share/opencode:/home/agent/.local/share/opencode:Z"
 [[ -d "$HOME/.config/zellij" ]] && OPTIONAL_MOUNTS="$OPTIONAL_MOUNTS -v $HOME/.config/zellij:/config/zellij:ro"
+
+# Mount bundled OpenCode MCP config if no user config exists
+if [[ "$AGENT_TYPE" == "opencode" ]] && [[ ! -d "$HOME/.config/opencode" ]] && [[ -f "./config/agents/opencode/opencode.json" ]]; then
+    mkdir -p /tmp/opencode-config
+    cp ./config/agents/opencode/opencode.json /tmp/opencode-config/
+    OPTIONAL_MOUNTS="$OPTIONAL_MOUNTS -v /tmp/opencode-config:/config/opencode:Z"
+fi
 
 echo "Starting new session '$SESSION_NAME'..."
 podman run -d \
