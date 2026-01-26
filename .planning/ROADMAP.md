@@ -64,10 +64,12 @@ Plans:
   3. User can specify agent via --agent flag for scripting and automation
   4. Interactive menu shows agent descriptions and defaults intelligently
   5. Both agents install their dependencies correctly and launch without conflicts
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] TBD
+- [ ] 03-01-PLAN.md — OpenCode agent definition (config, MCP config, Containerfile stage)
+- [ ] 03-02-PLAN.md — Interactive agent selection with build status detection
+- [ ] 03-03-PLAN.md — OpenCode runtime integration and end-to-end verification
 
 ### Phase 4: Session Management
 **Goal**: Users can manage container lifecycle without raw podman commands
@@ -108,6 +110,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 |-------|----------------|--------|-----------|
 | 1. Release Audit | 3/3 | Complete | 2026-01-26 |
 | 2. Agent Abstraction | 4/4 | Complete | 2026-01-26 |
-| 3. Multi-Agent Support | 0/TBD | Not started | - |
+| 3. Multi-Agent Support | 0/3 | In progress | - |
 | 4. Session Management | 0/TBD | Not started | - |
 | 5. Documentation | 0/TBD | Not started | - |
