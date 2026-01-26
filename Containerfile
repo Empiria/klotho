@@ -47,6 +47,7 @@ CMD ["zellij"]
 FROM base AS claude
 
 # Accept build args for config values
+ARG AGENT_NAME
 ARG AGENT_INSTALL_CMD
 ARG AGENT_SHELL
 ARG AGENT_LAUNCH_CMD
@@ -57,12 +58,12 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 # Install Claude Code using config value
 RUN eval "$AGENT_INSTALL_CMD"
 
-# Create claude wrapper script using AGENT_LAUNCH_CMD
+# Create agent wrapper script using AGENT_LAUNCH_CMD
 RUN printf '%s\n' \
     '#!/usr/bin/env fish' \
     "$AGENT_LAUNCH_CMD" \
     'exec fish' \
-    > ~/.local/bin/claude-session && chmod +x ~/.local/bin/claude-session
+    > ~/.local/bin/${AGENT_NAME}-session && chmod +x ~/.local/bin/${AGENT_NAME}-session
 
 # Set environment from config
 ENV SHELL="$AGENT_SHELL"
