@@ -134,16 +134,19 @@ if [[ -n "${AGENT_SESSION_MOUNTS:-}" ]]; then
     done
 fi
 
+# Build optional mounts - only include if directory exists
+OPTIONAL_MOUNTS=""
+[[ -d "$HOME/.claude" ]] && OPTIONAL_MOUNTS="$OPTIONAL_MOUNTS -v $HOME/.claude:/config/.claude:Z"
+[[ -d "$HOME/.local/share/claude" ]] && OPTIONAL_MOUNTS="$OPTIONAL_MOUNTS -v $HOME/.local/share/claude:/home/agent/.local/share/claude:Z"
+[[ -d "$HOME/.config/zellij" ]] && OPTIONAL_MOUNTS="$OPTIONAL_MOUNTS -v $HOME/.config/zellij:/config/zellij:ro"
 
 echo "Starting new session '$SESSION_NAME'..."
 podman run -d \
     --name "$CONTAINER_NAME" \
     --userns=keep-id \
     --workdir "$FIRST_DIR" \
-    -v "$HOME/.claude:/config/.claude:Z" \
     -v "$HOME/.claude.json:/home/agent/.claude.json:Z" \
-    -v "$HOME/.local/share/claude:/home/agent/.local/share/claude:Z" \
-    -v "$HOME/.config/zellij:/config/zellij:ro" \
+    $OPTIONAL_MOUNTS \
     $EXTRA_MOUNTS \
     $MOUNTS \
     claude-agent \
