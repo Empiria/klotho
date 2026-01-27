@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 ## Current Position
 
-Phase: 7 of 9 (Rust Rewrite)
-Plan: 8 of 8 in current phase
-Status: Phase complete
-Last activity: 2026-01-27 - Phase 7 complete
+Phase: 9 of 9 (Refactor KLOTHO_KOB)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-01-27 - Completed 09-01-PLAN.md
 
-Progress: [████████████████████] 100% (Phase 7 complete, 19/27 milestone plans)
+Progress: [████████████████████░] 74% (20/27 milestone plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 19
-- Average duration: 2.8 min
-- Total execution time: 0.95 hours
+- Total plans completed: 20
+- Average duration: 2.7 min
+- Total execution time: 0.97 hours
 
 **By Phase:**
 
@@ -34,9 +34,10 @@ Progress: [████████████████████] 100% (P
 | 05-documentation | 2 | 4.4min | 2.2min |
 | 06-rename-to-klotho | 3 | 3min | 1min |
 | 07-rust-rewrite | 8 | 26min | 3.25min |
+| 09-refactor-klotho-kob | 1 | 1min | 1min |
 
 **Recent Trend:**
-- Phase 7 complete: Rust CLI with all commands, release infrastructure, and human-verified E2E testing
+- Phase 9 in progress: 1/2 plans complete. Added CLI flag infrastructure for KLOTHO_LINKED_DIRS feature.
 
 *Updated after each plan completion*
 
@@ -110,6 +111,8 @@ Recent decisions affecting current work:
 | 07-07 | Wrap installer in main() function | Safety measure prevents partial execution if curl pipe interrupted |
 | 07-07 | Support both curl and wget in installer | Maximizes compatibility across different systems |
 | 07-07 | Warn when install directory not in PATH | Better UX - users know immediately if they need to update shell profile |
+| 09-01 | Use Vec<String> for repeatable --linked-dir flag | clap automatically handles collection of repeated flags |
+| 09-01 | Use .. pattern in match to ignore linked_dirs field | Flag added to CLI interface but not yet consumed by start command until plan 09-02 |
 
 ### Pending Todos
 
@@ -133,7 +136,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Phase 7 complete
+Stopped at: Completed 09-01-PLAN.md
 Resume file: None
 
-**Phase 7 Complete:** Rust CLI rewrite finished. All 8 plans executed: project setup, config/runtime, embedded resources, all commands (start, stop, restart, ls, rm, build, rebuild), GitHub Actions CI/CD, installer script, and human-verified E2E testing. Two bugs fixed during verification (spinner animation, container keep-alive). Ready for Phase 8 (Docs Cleanup) or milestone audit.
+**Phase 9 In Progress:** Refactoring KLOTHO_KOB environment variable. Plan 09-01 complete: Added --linked-dir CLI flag infrastructure and removed deprecated bash script. Ready for plan 09-02 to wire flag to start command.
