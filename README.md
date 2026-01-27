@@ -1,10 +1,14 @@
-# Agent Session
+# Klotho
 
 Run AI coding agents in isolated, reproducible environments with persistent terminal sessions.
 
-Agent Session creates containerized workspaces for AI agents like Claude Code and OpenCode, giving you consistent development environments that persist across terminal disconnects. Work with your AI pair programmer in a clean, managed space with your projects mounted exactly where you need them. When you close your terminal, the agent session keeps running in the background — reattach anytime and pick up right where you left off.
+Klotho creates containerized workspaces for AI agents like Claude Code and OpenCode, giving you consistent development environments that persist across terminal disconnects. Work with your AI pair programmer in a clean, managed space with your projects mounted exactly where you need them. When you close your terminal, the agent session keeps running in the background — reattach anytime and pick up right where you left off.
 
 Perfect for developers who want reliable AI assistance without worrying about environment drift, dependency conflicts, or losing work when switching tasks.
+
+## About the Name
+
+In Greek mythology, Klotho is one of the Three Fates who spins the thread of life — reflecting this tool's purpose of spinning up and managing AI agent session lifecycles.
 
 ## Prerequisites
 
@@ -12,7 +16,7 @@ See [PREREQUISITES.md](PREREQUISITES.md) for detailed installation instructions,
 
 ### Podman
 
-Container runtime for rootless containers. Used to build and run the agent-session environment.
+Container runtime for rootless containers. Used to build and run the Klotho environment.
 
 **Required version:** 4.0+
 
@@ -57,7 +61,7 @@ See the [official Podman installation guide](https://podman.io/getting-started/i
 
 ### Bash
 
-Shell interpreter required to run the `agent-session` wrapper script.
+Shell interpreter required to run the `klotho` wrapper script.
 
 **Required version:** 4.0+
 
@@ -117,8 +121,8 @@ Start your first agent session in under 5 minutes:
 
 **1. Clone and enter the repository:**
 ```bash
-git clone https://github.com/your-username/agent-session.git
-cd agent-session
+git clone https://github.com/your-username/klotho.git
+cd klotho
 ```
 
 **2. Build the default agent (Claude):**
@@ -130,7 +134,7 @@ This downloads and configures Claude Code, Zellij, and supporting tools inside a
 
 **3. Start a session with your current directory:**
 ```bash
-./agent-session start
+./klotho start
 ```
 
 This creates a container, mounts your current directory to `/workspace`, and drops you into a Zellij terminal session.
@@ -153,32 +157,32 @@ Press `Ctrl+C` or close your terminal — the session keeps running in the backg
 
 **6. Reattach later:**
 ```bash
-./agent-session start
+./klotho start
 ```
 
 **7. Use with your own projects:**
 
 Mount specific directories:
 ```bash
-./agent-session start ~/projects/my-app
+./klotho start ~/projects/my-app
 ```
 
 Mount multiple repositories in one session:
 ```bash
-./agent-session start -n fullstack ~/frontend ~/backend ~/shared-libs
+./klotho start -n fullstack ~/frontend ~/backend ~/shared-libs
 ```
 
 **8. Choose your agent:**
 
-Agent Session supports multiple AI agents. Use the `-a` flag to select:
+Klotho supports multiple AI agents. Use the `-a` flag to select:
 
 ```bash
-./agent-session start -a opencode ~/project
+./klotho start -a opencode ~/project
 ```
 
 Or omit the `-a` flag to see an interactive menu of available agents:
 ```bash
-./agent-session start
+./klotho start
 ```
 
 You'll see:
@@ -200,7 +204,7 @@ New to some of the technologies? Here's what you need to know:
 
 **Zellij vs tmux:** Zellij is a modern terminal multiplexer like tmux or screen. The key feature: your terminal sessions persist even when you disconnect. Close your laptop, SSH drops, terminal crashes? Your work is still there when you reconnect.
 
-**Agents:** AI coding assistants like Claude Code and OpenCode that help you write, debug, and understand code. Agent Session creates isolated container environments for these agents so they have consistent, reproducible workspaces every time.
+**Agents:** AI coding assistants like Claude Code and OpenCode that help you write, debug, and understand code. Klotho creates isolated container environments for these agents so they have consistent, reproducible workspaces every time.
 
 ## Commands
 
@@ -211,7 +215,7 @@ New to some of the technologies? Here's what you need to know:
 
 **Syntax:**
 ```
-agent-session start [-a AGENT] [-n NAME] [project-paths...]
+klotho start [-a AGENT] [-n NAME] [project-paths...]
 ```
 
 **Options:**
@@ -221,32 +225,32 @@ agent-session start [-a AGENT] [-n NAME] [project-paths...]
 
 **Examples:**
 ```bash
-agent-session start
+klotho start
 ```
 Start a new session with the current directory.
 
 ```bash
-agent-session start ~/projects/webapp
+klotho start ~/projects/webapp
 ```
 Start a new session with a specific project.
 
 ```bash
-agent-session start -n frontend ~/projects/webapp
+klotho start -n frontend ~/projects/webapp
 ```
 Start a named session called "frontend".
 
 ```bash
-agent-session start -n fullstack ~/frontend ~/backend ~/shared-libs
+klotho start -n fullstack ~/frontend ~/backend ~/shared-libs
 ```
 Start a session with multiple repositories mounted.
 
 ```bash
-agent-session start -a opencode ~/project
+klotho start -a opencode ~/project
 ```
 Start a session using the OpenCode agent.
 
 ```bash
-agent-session start -n frontend
+klotho start -n frontend
 ```
 Reattach to an existing session named "frontend" (no path needed when session exists).
 
@@ -254,7 +258,7 @@ Reattach to an existing session named "frontend" (no path needed when session ex
 - Sessions persist across terminal disconnects — press `Ctrl+C` or close your terminal to detach
 - If no `-a` flag provided, shows an interactive menu of available agents
 - Omit the session name to reattach to the "default" session
-- Environment variables `AGENT_SESSION_MOUNTS` and `AGENT_SESSION_KOB` available for advanced use cases (see `agent-session start --help`)
+- Environment variables `KLOTHO_MOUNTS` and `KLOTHO_KOB` available for advanced use cases (see `klotho start --help`)
 
 </details>
 
@@ -265,7 +269,7 @@ Reattach to an existing session named "frontend" (no path needed when session ex
 
 **Syntax:**
 ```
-agent-session stop [SESSION_NAME]
+klotho stop [SESSION_NAME]
 ```
 
 **Arguments:**
@@ -276,19 +280,19 @@ agent-session stop [SESSION_NAME]
 
 **Examples:**
 ```bash
-agent-session stop
+klotho stop
 ```
 Stop the "default" session.
 
 ```bash
-agent-session stop frontend
+klotho stop frontend
 ```
 Stop the session named "frontend".
 
 **Notes:**
 - Stopping an already-stopped session succeeds silently (idempotent)
-- Stopped sessions can be restarted with `agent-session restart`
-- Use `agent-session ls` to see session status
+- Stopped sessions can be restarted with `klotho restart`
+- Use `klotho ls` to see session status
 
 </details>
 
@@ -299,7 +303,7 @@ Stop the session named "frontend".
 
 **Syntax:**
 ```
-agent-session restart [SESSION_NAME]
+klotho restart [SESSION_NAME]
 ```
 
 **Arguments:**
@@ -310,18 +314,18 @@ agent-session restart [SESSION_NAME]
 
 **Examples:**
 ```bash
-agent-session restart
+klotho restart
 ```
 Restart the "default" session.
 
 ```bash
-agent-session restart frontend
+klotho restart frontend
 ```
 Restart the session named "frontend".
 
 **Notes:**
 - If session is already running, simply reattaches (no restart needed)
-- Use `agent-session ls` to see session status
+- Use `klotho ls` to see session status
 
 </details>
 
@@ -332,7 +336,7 @@ Restart the session named "frontend".
 
 **Syntax:**
 ```
-agent-session ls
+klotho ls
 ```
 
 **Options:**
@@ -360,7 +364,7 @@ backend              opencode     running
 
 **Syntax:**
 ```
-agent-session rm [-f|--force] [SESSION_NAME]
+klotho rm [-f|--force] [SESSION_NAME]
 ```
 
 **Arguments:**
@@ -372,19 +376,19 @@ agent-session rm [-f|--force] [SESSION_NAME]
 
 **Examples:**
 ```bash
-agent-session rm frontend
+klotho rm frontend
 ```
 Remove the "frontend" session with confirmation prompt.
 
 ```bash
-agent-session rm -f frontend
+klotho rm -f frontend
 ```
 Remove the "frontend" session without confirmation.
 
 **Notes:**
-- Cannot remove a running session — stop it first with `agent-session stop`
+- Cannot remove a running session — stop it first with `klotho stop`
 - Removal is permanent — container and its state are deleted
-- Use `agent-session ls` to see which sessions exist
+- Use `klotho ls` to see which sessions exist
 
 </details>
 
@@ -484,7 +488,7 @@ Should show uid and gid mappings without errors.
 
 **Solution:**
 ```bash
-agent-session ls
+klotho ls
 ```
 
 This shows all available sessions and their current status.
@@ -493,7 +497,7 @@ This shows all available sessions and their current status.
 
 ### "cannot remove running session"
 
-**Symptom:** Error when trying to `agent-session rm` a session.
+**Symptom:** Error when trying to `klotho rm` a session.
 
 **Cause:** You're trying to remove a session that's currently running.
 
@@ -501,17 +505,17 @@ This shows all available sessions and their current status.
 
 Stop the session first:
 ```bash
-agent-session stop SESSION_NAME
+klotho stop SESSION_NAME
 ```
 
 Then remove it:
 ```bash
-agent-session rm SESSION_NAME
+klotho rm SESSION_NAME
 ```
 
 **Verify:**
 ```bash
-agent-session ls
+klotho ls
 ```
 
 The session should show as "stopped" before removal.
@@ -540,14 +544,14 @@ or for OpenCode:
 
 **Verify:**
 ```bash
-podman images | grep agent-session
+podman images | grep klotho
 ```
 
-You should see `agent-session-claude` and/or `agent-session-opencode` in the output.
+You should see `klotho-claude` and/or `klotho-opencode` in the output.
 
 ### Container fails to start or won't attach
 
-**Symptom:** Session starts but immediately exits, or `agent-session start` hangs.
+**Symptom:** Session starts but immediately exits, or `klotho start` hangs.
 
 **Cause:** Missing required credentials or configuration files.
 
@@ -581,7 +585,7 @@ Should look like:
 
 **Verify:**
 ```bash
-agent-session start
+klotho start
 ```
 
 Should create and attach to the session without errors.

@@ -1,6 +1,6 @@
 # Prerequisites
 
-This document lists all requirements needed to use `agent-session` on your machine.
+This document lists all requirements needed to use Klotho on your machine.
 
 ## Host System Requirements
 
@@ -22,7 +22,7 @@ uname -s
 
 ### Podman
 
-Container runtime for rootless containers. Used to build and run the agent-session environment.
+Container runtime for rootless containers. Used to build and run the Klotho environment.
 
 **Required version:** 4.0+
 
@@ -81,7 +81,7 @@ podman machine start
 
 ### Bash
 
-Shell interpreter required to run the `agent-session` wrapper script.
+Shell interpreter required to run the `klotho` wrapper script.
 
 **Required version:** 4.0+
 
@@ -128,7 +128,7 @@ chsh -s /opt/homebrew/bin/bash  # or /usr/local/bin/bash for Intel
 
 ### Git (Optional)
 
-Required if you want to work with version-controlled projects inside agent-session. The container includes git, but your projects likely need it on the host system.
+Required if you want to work with version-controlled projects inside Klotho. The container includes git, but your projects likely need it on the host system.
 
 **Verify:**
 ```bash
@@ -272,12 +272,12 @@ After verifying prerequisites:
 
 2. Build the container image:
    ```bash
-   podman build -t claude-agent .
+   ./scripts/build.sh claude
    ```
 
 3. Start your first session:
    ```bash
-   ./agent-session -n test $(pwd)
+   ./klotho start
    ```
 
 4. Inside the container, Claude Code will start automatically. Type `/gsd:help` to explore the get-shit-done workflow system.
@@ -324,5 +324,5 @@ Check your network connection and firewall settings. The build requires HTTPS ac
 
 The container build failed or completed with errors. Rebuild with:
 ```bash
-podman build --no-cache -t claude-agent .
+./scripts/build.sh claude
 ```

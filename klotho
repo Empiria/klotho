@@ -7,17 +7,19 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # Colors (disabled if not a terminal)
 if [[ -t 1 ]]; then
     readonly COLOR_GREEN='\033[0;32m'
+    readonly COLOR_YELLOW='\033[0;33m'
     readonly COLOR_RED='\033[0;31m'
     readonly COLOR_RESET='\033[0m'
 else
     readonly COLOR_GREEN=''
+    readonly COLOR_YELLOW=''
     readonly COLOR_RED=''
     readonly COLOR_RESET=''
 fi
 
 show_help() {
     cat << 'EOF'
-Usage: agent-session <command> [options]
+Usage: klotho <command> [options]
 
 Run AI agents in isolated containers with persistent Zellij sessions.
 
@@ -28,21 +30,21 @@ Commands:
   ls      List all sessions with status
   rm      Remove a stopped session
 
-Run 'agent-session <command> --help' for command-specific help.
+Run 'klotho <command> --help' for command-specific help.
 
 Examples:
-  agent-session start                           # new session with current dir
-  agent-session start -n frontend ~/webapp      # named session "frontend"
-  agent-session ls                              # list all sessions
-  agent-session stop frontend                   # stop a session
-  agent-session restart frontend                # restart and reattach
-  agent-session rm frontend                     # remove stopped session
+  klotho start                           # new session with current dir
+  klotho start -n frontend ~/webapp      # named session "frontend"
+  klotho ls                              # list all sessions
+  klotho stop frontend                   # stop a session
+  klotho restart frontend                # restart and reattach
+  klotho rm frontend                     # remove stopped session
 EOF
 }
 
 show_start_help() {
     cat << 'EOF'
-Usage: agent-session start [-a AGENT] [-n NAME] [project-paths...]
+Usage: klotho start [-a AGENT] [-n NAME] [project-paths...]
 
 Create a new agent session or attach to an existing one.
 
@@ -52,34 +54,36 @@ Options:
   -h, --help         Show this help message
 
 Examples:
-  agent-session start                                  # new session with current dir
-  agent-session start ~/projects/repo-a               # new session with specific project
-  agent-session start -n frontend ~/projects/webapp   # named session "frontend"
-  agent-session start -n backend ~/api ~/libs         # multiple repos in one session
-  agent-session start -n frontend                     # reattach to existing session
-  agent-session start -a claude -n test ~/project     # explicit agent selection
+  klotho start                                  # new session with current dir
+  klotho start ~/projects/repo-a               # new session with specific project
+  klotho start -n frontend ~/projects/webapp   # named session "frontend"
+  klotho start -n backend ~/api ~/libs         # multiple repos in one session
+  klotho start -n frontend                     # reattach to existing session
+  klotho start -a claude -n test ~/project     # explicit agent selection
 
 Session lifecycle:
   Sessions run in the background and persist across terminal disconnects.
   Close terminal or Ctrl+C to detach - session keeps running.
-  Run 'agent-session start' with same name to reattach.
+  Run 'klotho start' with same name to reattach.
 
 Environment variables:
-  AGENT_SESSION_MOUNTS    Extra host paths to mount (colon-separated)
-                          Paths are mounted at the same location in container.
-                          Example: AGENT_SESSION_MOUNTS="$HOME/dotfiles:$HOME/scripts"
+  KLOTHO_MOUNTS         Extra host paths to mount (colon-separated)
+                        Paths are mounted at the same location in container.
+                        Example: KLOTHO_MOUNTS="$HOME/dotfiles:$HOME/scripts"
+                        Legacy: AGENT_SESSION_MOUNTS also supported
 
-  AGENT_SESSION_KOB       Path to kob repo for projects with symlinks to external
-                          planning/config repos. Mounted at same path in container
-                          so existing symlinks resolve correctly.
-                          Example: AGENT_SESSION_KOB="/home/user/projects/my-kob-repo"
-                          Tip: Use direnv to set this per-project in .envrc
+  KLOTHO_KOB            Path to kob repo for projects with symlinks to external
+                        planning/config repos. Mounted at same path in container
+                        so existing symlinks resolve correctly.
+                        Example: KLOTHO_KOB="/home/user/projects/my-kob-repo"
+                        Tip: Use direnv to set this per-project in .envrc
+                        Legacy: AGENT_SESSION_KOB also supported
 EOF
 }
 
 show_stop_help() {
     cat << 'EOF'
-Usage: agent-session stop [SESSION_NAME]
+Usage: klotho stop [SESSION_NAME]
 
 Stop a running session. The session can be restarted later.
 
@@ -90,18 +94,18 @@ Options:
   -h, --help      Show this help message
 
 Examples:
-  agent-session stop              # stop session named "default"
-  agent-session stop frontend     # stop session named "frontend"
+  klotho stop              # stop session named "default"
+  klotho stop frontend     # stop session named "frontend"
 
 Notes:
   - Stopping an already-stopped session succeeds silently
-  - Use 'agent-session ls' to see session status
+  - Use 'klotho ls' to see session status
 EOF
 }
 
 show_restart_help() {
     cat << 'EOF'
-Usage: agent-session restart [SESSION_NAME]
+Usage: klotho restart [SESSION_NAME]
 
 Restart a stopped session and reattach to its Zellij terminal.
 
@@ -112,18 +116,18 @@ Options:
   -h, --help      Show this help message
 
 Examples:
-  agent-session restart              # restart session named "default"
-  agent-session restart frontend     # restart session named "frontend"
+  klotho restart              # restart session named "default"
+  klotho restart frontend     # restart session named "frontend"
 
 Notes:
   - If session is already running, simply reattaches
-  - Use 'agent-session ls' to see session status
+  - Use 'klotho ls' to see session status
 EOF
 }
 
 show_ls_help() {
     cat << 'EOF'
-Usage: agent-session ls
+Usage: klotho ls
 
 List all agent sessions with their status.
 
@@ -139,7 +143,7 @@ EOF
 
 show_rm_help() {
     cat << 'EOF'
-Usage: agent-session rm [-f|--force] [SESSION_NAME]
+Usage: klotho rm [-f|--force] [SESSION_NAME]
 
 Remove a stopped session container.
 
@@ -151,8 +155,8 @@ Options:
   -h, --help      Show this help message
 
 Examples:
-  agent-session rm frontend          # remove with confirmation
-  agent-session rm -f frontend       # remove without confirmation
+  klotho rm frontend          # remove with confirmation
+  klotho rm -f frontend       # remove without confirmation
 
 Notes:
   - Cannot remove a running session (stop it first)
@@ -173,9 +177,11 @@ discover_agents() {
     fi
 }
 
-# Check if agent image is built
+# Check if agent image is built (supports both old and new naming)
 agent_is_built() {
     local agent="$1"
+    # Check new naming first, then legacy
+    podman image exists "klotho-${agent}:latest" 2>/dev/null || \
     podman image exists "agent-session-${agent}:latest" 2>/dev/null
 }
 
@@ -244,33 +250,84 @@ validate_config() {
     return 0
 }
 
+# Get config home with XDG fallback and klotho/agent-session layering
+get_config_home() {
+    local config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+
+    # Check klotho config first (preferred)
+    if [[ -d "$config_home/klotho" ]]; then
+        echo "$config_home/klotho"
+        return
+    fi
+
+    # Fall back to legacy agent-session config with deprecation warning
+    if [[ -d "$config_home/agent-session" ]]; then
+        echo -e "${COLOR_YELLOW}warning: ~/.config/agent-session is deprecated, please rename to ~/.config/klotho${COLOR_RESET}" >&2
+        echo "$config_home/agent-session"
+        return
+    fi
+
+    # Default to klotho (new installations)
+    echo "$config_home/klotho"
+}
+
 # Prompt to build agent if image doesn't exist
 ensure_agent_built() {
     local agent="$1"
-    local image="agent-session-${agent}:latest"
 
-    if ! podman image exists "$image" 2>/dev/null; then
-        echo ""
-        read -p "Image not built. Build now? [y/N] " answer
-        answer="${answer:-N}"
-        if [[ "$answer" =~ ^[Yy]$ ]]; then
-            echo "Building ${agent}..."
-            "$SCRIPT_DIR/scripts/build.sh" "$agent" || {
-                echo "error: build failed" >&2
-                exit 1
-            }
-        else
-            echo "Cannot start session without built image."
-            exit 1
-        fi
+    # Check for new naming first
+    if podman image exists "klotho-${agent}:latest" 2>/dev/null; then
+        return 0
     fi
+
+    # Check for legacy naming
+    if podman image exists "agent-session-${agent}:latest" 2>/dev/null; then
+        echo -e "${COLOR_YELLOW}note: using legacy image agent-session-${agent}:latest${COLOR_RESET}"
+        echo -e "${COLOR_YELLOW}      rebuild with ./scripts/build.sh ${agent} for new naming${COLOR_RESET}"
+        return 0
+    fi
+
+    echo ""
+    read -p "Image not built. Build now? [y/N] " answer
+    answer="${answer:-N}"
+    if [[ "$answer" =~ ^[Yy]$ ]]; then
+        echo "Building ${agent}..."
+        "$SCRIPT_DIR/scripts/build.sh" "$agent" || {
+            echo "error: build failed" >&2
+            exit 1
+        }
+    else
+        echo "Cannot start session without built image."
+        exit 1
+    fi
+}
+
+# Get image name (prefers new naming, falls back to legacy)
+get_image_name() {
+    local agent="$1"
+
+    # Prefer new naming
+    if podman image exists "klotho-${agent}:latest" 2>/dev/null; then
+        echo "klotho-${agent}:latest"
+        return
+    fi
+
+    # Fall back to legacy
+    if podman image exists "agent-session-${agent}:latest" 2>/dev/null; then
+        echo "agent-session-${agent}:latest"
+        return
+    fi
+
+    # Default to new naming (for new builds)
+    echo "klotho-${agent}:latest"
 }
 
 # Load agent config with XDG-style layering
 load_agent_config() {
     local agent="$1"
-    local config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
-    local user_config="$config_home/agent-session/agents/$agent/config.conf"
+    local config_home
+    config_home=$(get_config_home)
+    local user_config="$config_home/agents/$agent/config.conf"
     local repo_config="$SCRIPT_DIR/config/agents/$agent/config.conf"
 
     # Load repo default first (must exist)
@@ -292,7 +349,7 @@ load_agent_config() {
     return 0
 }
 
-# Build dynamic agent type pattern for grep
+# Build dynamic agent type pattern for grep (supports both old and new container naming)
 get_agent_pattern() {
     discover_agents
     local pattern=""
@@ -303,10 +360,11 @@ get_agent_pattern() {
             pattern="$agent"
         fi
     done
-    echo "^($pattern)-"
+    # Match both new (klotho-<agent>-<session>) and legacy (<agent>-<session>) patterns
+    echo "^(klotho-)?($pattern)-"
 }
 
-# Find container by session name (searches all agent types)
+# Find container by session name (searches all agent types and both naming conventions)
 find_container() {
     local session_name="$1"
     local pattern
@@ -317,7 +375,7 @@ find_container() {
 
     if [[ -z "$container" ]]; then
         echo "error: session '$session_name' not found" >&2
-        echo "Use 'agent-session ls' to see available sessions." >&2
+        echo "Use 'klotho ls' to see available sessions." >&2
         return 1
     fi
 
@@ -340,6 +398,27 @@ attach_zellij() {
         # Start new session with agent wrapper as the shell (runs agent, then drops to configured shell)
         podman exec -it -e SHELL=/home/agent/.local/bin/${AGENT_NAME}-session -e AGENT_LAUNCH_CMD="$AGENT_LAUNCH_CMD" "$CONTAINER_NAME" bash -c "zellij -s '$SESSION_NAME'; zellij list-sessions 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -q '^$SESSION_NAME ' || exec $AGENT_SHELL"
     fi
+}
+
+# Get environment variable value (supports both KLOTHO_* and legacy AGENT_SESSION_*)
+get_env_var() {
+    local new_name="$1"
+    local legacy_name="$2"
+
+    # Prefer new naming
+    if [[ -n "${!new_name:-}" ]]; then
+        echo "${!new_name}"
+        return
+    fi
+
+    # Fall back to legacy with warning
+    if [[ -n "${!legacy_name:-}" ]]; then
+        echo -e "${COLOR_YELLOW}warning: $legacy_name is deprecated, please use $new_name${COLOR_RESET}" >&2
+        echo "${!legacy_name}"
+        return
+    fi
+
+    echo ""
 }
 
 # =============================================================================
@@ -404,21 +483,41 @@ cmd_start() {
     # Ensure image is built
     ensure_agent_built "$AGENT_TYPE"
 
-    CONTAINER_NAME="${AGENT_TYPE}-${SESSION_NAME}"
-    IMAGE_NAME="agent-session-${AGENT_TYPE}:latest"
+    # Use new naming convention for containers
+    CONTAINER_NAME="klotho-${AGENT_TYPE}-${SESSION_NAME}"
+    IMAGE_NAME=$(get_image_name "$AGENT_TYPE")
 
-    # Check if container exists and is running
+    # Check if container exists with new naming and is running
     if podman ps --format "{{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
         echo "Attaching to '$SESSION_NAME'..."
         attach_zellij
         exit 0
     fi
 
-    # Check if container exists but stopped
+    # Check if container exists with new naming but stopped
     if podman ps -a --format "{{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
         echo "Starting '$SESSION_NAME'..."
         podman start "$CONTAINER_NAME"
         sleep 1  # Wait for container to be ready
+        attach_zellij
+        exit 0
+    fi
+
+    # Check for legacy container naming (running)
+    local LEGACY_CONTAINER="${AGENT_TYPE}-${SESSION_NAME}"
+    if podman ps --format "{{.Names}}" | grep -q "^${LEGACY_CONTAINER}$"; then
+        echo -e "${COLOR_YELLOW}note: attaching to legacy container ${LEGACY_CONTAINER}${COLOR_RESET}"
+        CONTAINER_NAME="$LEGACY_CONTAINER"
+        attach_zellij
+        exit 0
+    fi
+
+    # Check for legacy container naming (stopped)
+    if podman ps -a --format "{{.Names}}" | grep -q "^${LEGACY_CONTAINER}$"; then
+        echo -e "${COLOR_YELLOW}note: starting legacy container ${LEGACY_CONTAINER}${COLOR_RESET}"
+        CONTAINER_NAME="$LEGACY_CONTAINER"
+        podman start "$CONTAINER_NAME"
+        sleep 1
         attach_zellij
         exit 0
     fi
@@ -448,24 +547,29 @@ cmd_start() {
     done
 
     # Mount kob repo at same path so symlinks resolve correctly
+    # Support both KLOTHO_KOB (new) and AGENT_SESSION_KOB (legacy)
     KOB_MOUNT=""
-    if [[ -n "${AGENT_SESSION_KOB:-}" ]]; then
-        if [[ -d "$AGENT_SESSION_KOB" ]]; then
-            KOB_MOUNT="-v $AGENT_SESSION_KOB:$AGENT_SESSION_KOB:Z"
+    local kob_path
+    kob_path=$(get_env_var "KLOTHO_KOB" "AGENT_SESSION_KOB")
+    if [[ -n "$kob_path" ]]; then
+        if [[ -d "$kob_path" ]]; then
+            KOB_MOUNT="-v $kob_path:$kob_path:Z"
         else
-            echo "warning: AGENT_SESSION_KOB path does not exist: $AGENT_SESSION_KOB" >&2
+            echo "warning: KLOTHO_KOB path does not exist: $kob_path" >&2
         fi
     fi
 
-    # Build extra mounts from AGENT_SESSION_MOUNTS env var
+    # Build extra mounts from KLOTHO_MOUNTS or AGENT_SESSION_MOUNTS env var
     EXTRA_MOUNTS=""
-    if [[ -n "${AGENT_SESSION_MOUNTS:-}" ]]; then
-        IFS=':' read -ra MOUNT_PATHS <<< "$AGENT_SESSION_MOUNTS"
+    local mounts_value
+    mounts_value=$(get_env_var "KLOTHO_MOUNTS" "AGENT_SESSION_MOUNTS")
+    if [[ -n "$mounts_value" ]]; then
+        IFS=':' read -ra MOUNT_PATHS <<< "$mounts_value"
         for mount_path in "${MOUNT_PATHS[@]}"; do
             if [[ -e "$mount_path" ]]; then
                 EXTRA_MOUNTS="$EXTRA_MOUNTS -v $mount_path:$mount_path:ro"
             else
-                echo "warning: AGENT_SESSION_MOUNTS path does not exist: $mount_path" >&2
+                echo "warning: KLOTHO_MOUNTS path does not exist: $mount_path" >&2
             fi
         done
     fi
@@ -560,8 +664,16 @@ cmd_restart() {
     local container
     container=$(find_container "$session_name") || exit 1
 
-    # Extract agent type from container name
-    local agent_type="${container%%-*}"
+    # Extract agent type from container name (handle both klotho-agent-session and agent-session formats)
+    local agent_type
+    if [[ "$container" == klotho-* ]]; then
+        # New format: klotho-<agent>-<session>
+        local without_prefix="${container#klotho-}"
+        agent_type="${without_prefix%%-*}"
+    else
+        # Legacy format: <agent>-<session>
+        agent_type="${container%%-*}"
+    fi
 
     # Load agent config for attach_zellij
     load_agent_config "$agent_type" || exit 1
@@ -622,8 +734,16 @@ cmd_ls() {
     while IFS='|' read -r name status; do
         # Extract agent type and session name from container name
         local agent_type session_name
-        agent_type="${name%%-*}"
-        session_name="${name#*-}"
+        if [[ "$name" == klotho-* ]]; then
+            # New format: klotho-<agent>-<session>
+            local without_prefix="${name#klotho-}"
+            agent_type="${without_prefix%%-*}"
+            session_name="${without_prefix#*-}"
+        else
+            # Legacy format: <agent>-<session>
+            agent_type="${name%%-*}"
+            session_name="${name#*-}"
+        fi
 
         # Determine running/stopped from status string
         local state color
@@ -673,7 +793,7 @@ cmd_rm() {
     # Check if running - cannot rm running container
     if container_is_running "$container"; then
         echo "error: cannot remove running session '$session_name'" >&2
-        echo "Stop it first with: agent-session stop $session_name" >&2
+        echo "Stop it first with: klotho stop $session_name" >&2
         exit 1
     fi
 
@@ -725,7 +845,7 @@ main() {
             ;;
         *)
             echo "error: unknown command: $1" >&2
-            echo "Run 'agent-session --help' for usage." >&2
+            echo "Run 'klotho --help' for usage." >&2
             exit 1
             ;;
     esac

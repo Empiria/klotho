@@ -12,7 +12,7 @@ config/agents/
     └── config.conf
 ```
 
-**XDG Override:** User-specific agent configs can be placed in `~/.config/agent-session/agents/<agent-name>/config.conf` to override bundled configs without modifying the repository.
+**XDG Override:** User-specific agent configs can be placed in `~/.config/klotho/agents/<agent-name>/config.conf` to override bundled configs without modifying the repository. Legacy path `~/.config/agent-session/` is also supported with a deprecation warning.
 
 ## Required Fields
 
@@ -54,8 +54,8 @@ AGENT_ENV_VARS="PATH=/home/agent/.local/bin:\$PATH SHELL=/usr/bin/fish"
 1. Create config directory: `mkdir -p config/agents/<agent-name>`
 2. Write config file: `config/agents/<agent-name>/config.conf`
 3. Add Containerfile stage for agent installation (if needed)
-4. Rebuild container: `podman build -t agent-session .`
-5. Test with: `agent-session -n test-<agent-name> /path/to/project`
+4. Rebuild container: `./scripts/build.sh <agent-name>`
+5. Test with: `klotho start -a <agent-name> /path/to/project`
 
 ## Security Note
 
