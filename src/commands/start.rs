@@ -154,14 +154,26 @@ pub fn run(
     // Get image name (prefer new, fallback to legacy)
     let image_name = get_image_name(runtime, &agent)?;
 
+    // Get working directory (first mount point)
+    let workdir = if resolved_paths.len() == 1 {
+        "/workspace".to_string()
+    } else {
+        "/workspace1".to_string()
+    };
+
     // Run podman run with all mounts
+    // Use keep-alive loop so container stays running for exec attachment
     let mut cmd = runtime.command();
     cmd.arg("run")
         .arg("-d")
         .arg("--name")
         .arg(&container_name_new)
+        .arg("--userns=keep-id")
+        .arg("--workdir")
+        .arg(&workdir)
         .args(&mount_args)
-        .arg(&image_name);
+        .arg(&image_name)
+        .args(["bash", "-c", "trap 'exit 0' TERM; while :; do sleep 1; done"]);
 
     let output = cmd.output().context("Failed to create container")?;
 

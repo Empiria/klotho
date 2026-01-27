@@ -102,7 +102,7 @@ pub fn run_build(runtime: Runtime, agent: &str, no_cache: bool) -> Result<()> {
         build_cmd.arg("--no-cache");
     }
 
-    // Create spinner
+    // Create spinner with steady tick for animation
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
         ProgressStyle::default_spinner()
@@ -110,6 +110,7 @@ pub fn run_build(runtime: Runtime, agent: &str, no_cache: bool) -> Result<()> {
             .unwrap(),
     );
     spinner.set_message(format!("Building {} agent...", agent));
+    spinner.enable_steady_tick(std::time::Duration::from_millis(100));
 
     // Run build and capture stderr for progress
     let mut child = build_cmd.spawn().context("Failed to start build command")?;
