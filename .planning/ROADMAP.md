@@ -127,20 +127,22 @@ Plans:
 **Depends on**: Phase 6
 **Requirements**: None (new scope)
 **Success Criteria** (what must be TRUE):
-  1. Rust CLI provides all commands from bash version (start, stop, restart, ls, rm)
-  2. Single static binary with no runtime dependencies
+  1. Rust CLI provides all commands from bash version (start, stop, restart, ls, rm) plus new build/rebuild commands
+  2. Single static binary with no runtime dependencies (musl on Linux)
   3. Argument parsing and help text matches or improves on bash version
   4. Config file loading works identically to bash version
-  5. Podman container management works correctly
+  5. Podman container management works correctly, with Docker fallback via --runtime flag
   6. Zellij session attachment works correctly
   7. Legacy naming migration continues to work during transition
+  8. GitHub releases provide pre-built binaries for Linux, macOS, and Windows
+  9. curl | sh installer script available for quick installation
 **Plans**: 0 plans
 
 Plans:
 - [ ] TBD (run /gsd:plan-phase 7 to break down)
 
 **Details:**
-Rewrite the klotho bash script (~855 lines) in Rust to improve maintainability and enable single-binary distribution. The bash script has grown complex with argument parsing, config validation, container management, and legacy migration logic. Rust provides better error handling, proper data structures, and distributes as a single binary via GitHub releases or cargo install.
+Rewrite the klotho bash script (~855 lines) in Rust to improve maintainability and enable single-binary distribution. The bash script has grown complex with argument parsing, config validation, container management, and legacy migration logic. Rust provides better error handling, proper data structures, and distributes as a single binary via GitHub releases or cargo install. **Expanded scope:** Add build and rebuild commands (not in bash version), Docker fallback support, and curl | sh installer.
 
 ## Progress
 
