@@ -232,10 +232,16 @@ Forces a fresh build, useful when upstream tools have updated.
 
 ### Agent Configs
 
-Agent configs define how to install and run AI agents. They live in `config/agents/<agent-name>/config.conf`:
+Agent configs define how to install and run AI agents. Klotho comes with built-in configs for supported agents, but you can customize them by placing config files in:
+
+```
+~/.config/klotho/agents/<agent-name>/config.conf
+```
+
+User configs override the built-in defaults. For example, to customize the Claude agent:
 
 ```bash
-# config/agents/claude/config.conf
+# ~/.config/klotho/agents/claude/config.conf
 AGENT_NAME="claude"
 AGENT_DESCRIPTION="Anthropic Claude Code agent"
 AGENT_INSTALL_CMD="curl -fsSL https://claude.ai/install.sh | bash"
@@ -244,7 +250,7 @@ AGENT_SHELL="/usr/bin/fish"
 AGENT_ENV_VARS="PATH=/home/agent/.local/bin:\$PATH SHELL=/usr/bin/fish"
 ```
 
-**Required fields:**
+**Config fields:**
 
 | Field | Purpose |
 |-------|---------|
@@ -255,11 +261,9 @@ AGENT_ENV_VARS="PATH=/home/agent/.local/bin:\$PATH SHELL=/usr/bin/fish"
 | `AGENT_SHELL` | Default shell path |
 | `AGENT_ENV_VARS` | Space-separated KEY=value pairs |
 
-**User overrides:** Place custom configs in `~/.config/klotho/agents/<agent-name>/config.conf` to override bundled configs.
-
 ### Adding a New Agent
 
-1. Create config: `mkdir -p config/agents/myagent && vim config/agents/myagent/config.conf`
+1. Create config: `mkdir -p ~/.config/klotho/agents/myagent && vim ~/.config/klotho/agents/myagent/config.conf`
 2. Build image: `klotho build myagent`
 3. Test: `klotho start -a myagent ~/project`
 
