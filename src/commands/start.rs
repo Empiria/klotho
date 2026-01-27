@@ -17,6 +17,7 @@ use crate::resources;
 pub fn run(
     agent: Option<String>,
     name: String,
+    linked_dirs: Vec<String>,
     paths: Vec<String>,
     runtime_override: Option<&str>,
 ) -> Result<()> {
@@ -89,31 +90,45 @@ pub fn run(
         mount_args.push(format!("{}:{}:Z", path.display(), mount_point));
     }
 
-    // KLOTHO_KOB with legacy AGENT_SESSION_KOB fallback
-    if let Ok(kob) = env::var("KLOTHO_KOB") {
-        mount_args.push("-v".to_string());
-        mount_args.push(format!("{}:/home/agent/.klotho:Z", kob));
-    } else if let Ok(kob) = env::var("AGENT_SESSION_KOB") {
-        eprintln!(
-            "note: AGENT_SESSION_KOB is deprecated, use KLOTHO_KOB instead"
-        );
-        mount_args.push("-v".to_string());
-        mount_args.push(format!("{}:/home/agent/.klotho:Z", kob));
+    // KLOTHO_LINKED_DIRS: directories mounted at same path for symlink resolution
+    let mut all_linked_dirs = Vec::new();
+
+    // Parse environment variable (colon-separated)
+    if let Ok(env_dirs) = env::var("KLOTHO_LINKED_DIRS") {
+        for dir in env_dirs.split(':') {
+            let dir = dir.trim();
+            if !dir.is_empty() {
+                all_linked_dirs.push(dir.to_string());
+            }
+        }
     }
 
-    // KLOTHO_MOUNTS with legacy fallback
-    let mounts_var = if let Ok(mounts) = env::var("KLOTHO_MOUNTS") {
-        Some(mounts)
-    } else if let Ok(mounts) = env::var("AGENT_SESSION_EXTRA_MOUNTS") {
-        eprintln!(
-            "note: AGENT_SESSION_EXTRA_MOUNTS is deprecated, use KLOTHO_MOUNTS instead"
-        );
-        Some(mounts)
-    } else {
-        None
-    };
+    // Add CLI flags (merge with env var)
+    all_linked_dirs.extend(linked_dirs);
 
-    if let Some(mounts) = mounts_var {
+    // Deduplicate
+    all_linked_dirs.sort();
+    all_linked_dirs.dedup();
+
+    // Build mount arguments for linked directories
+    for dir in &all_linked_dirs {
+        let path = PathBuf::from(dir);
+        if !path.exists() {
+            eprintln!("warning: linked directory does not exist, skipping: {}", dir);
+            continue;
+        }
+
+        let canonical = path
+            .canonicalize()
+            .context(format!("failed to resolve linked directory: {}", dir))?;
+
+        // Mount at same path as host - critical for symlink resolution
+        mount_args.push("-v".to_string());
+        mount_args.push(format!("{}:{}:Z", canonical.display(), canonical.display()));
+    }
+
+    // KLOTHO_MOUNTS: additional mount specifications (keep this, no legacy fallback)
+    if let Ok(mounts) = env::var("KLOTHO_MOUNTS") {
         for mount in mounts.split(',') {
             let mount = mount.trim();
             if !mount.is_empty() {
