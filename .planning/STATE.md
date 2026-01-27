@@ -128,6 +128,7 @@ None yet.
 - Phase 6 added: Rename to Klotho (rebrand project and CLI from agent-session to klotho)
 - Phase 7 added: Rust Rewrite (migrate bash script to Rust for maintainability and single-binary distribution)
 - Phase 8 added: Docs Cleanup
+- Phase 9 added: Refactor KLOTHO_KOB
 
 ## Session Continuity
 

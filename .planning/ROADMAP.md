@@ -19,6 +19,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: Documentation** - Quick start guide and usage reference
 - [x] **Phase 6: Rename to Klotho** - Rebrand project and CLI from agent-session to klotho
 - [ ] **Phase 7: Rust Rewrite** - Migrate bash script to Rust for better maintainability and single-binary distribution
+- [ ] **Phase 8: Docs Cleanup** - Documentation cleanup and updates
+- [ ] **Phase 9: Refactor KLOTHO_KOB** - Refactor KLOTHO_KOB environment variable handling
 
 ## Phase Details
 
@@ -151,10 +153,38 @@ Plans:
 **Details:**
 Rewrite the klotho bash script (~855 lines) in Rust to improve maintainability and enable single-binary distribution. The bash script has grown complex with argument parsing, config validation, container management, and legacy migration logic. Rust provides better error handling, proper data structures, and distributes as a single binary via GitHub releases or cargo install. **Expanded scope:** Add build and rebuild commands (not in bash version), Docker fallback support, and curl | sh installer.
 
+### Phase 8: Docs Cleanup
+**Goal**: [To be planned]
+**Depends on**: Phase 7
+**Requirements**: None (new scope)
+**Success Criteria** (what must be TRUE):
+  1. TBD (run /gsd:plan-phase 8 to break down)
+**Plans**: 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 8 to break down)
+
+**Details:**
+[To be added during planning]
+
+### Phase 9: Refactor KLOTHO_KOB
+**Goal**: [To be planned]
+**Depends on**: Phase 8
+**Requirements**: None (new scope)
+**Success Criteria** (what must be TRUE):
+  1. TBD (run /gsd:plan-phase 9 to break down)
+**Plans**: 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 9 to break down)
+
+**Details:**
+[To be added during planning]
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -165,3 +195,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 5. Documentation | 2/2 | Complete | 2026-01-27 |
 | 6. Rename to Klotho | 3/3 | Complete | 2026-01-27 |
 | 7. Rust Rewrite | 0/8 | Not started | - |
+| 8. Docs Cleanup | 0/0 | Not started | - |
+| 9. Refactor KLOTHO_KOB | 0/0 | Not started | - |
