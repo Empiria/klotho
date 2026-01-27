@@ -8,6 +8,8 @@ Perfect for developers who want reliable AI assistance without worrying about en
 
 ## Prerequisites
 
+See [PREREQUISITES.md](PREREQUISITES.md) for detailed installation instructions, platform-specific notes, and verification checklists.
+
 ### Podman
 
 Container runtime for rootless containers. Used to build and run the agent-session environment.
