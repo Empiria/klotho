@@ -12,16 +12,16 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 Phase: 7 of 7 (Rust Rewrite)
 Plan: 7 of 8 in current phase
 Status: In progress
-Last activity: 2026-01-27 - Completed 07-04-PLAN.md
+Last activity: 2026-01-27 - Completed 07-07-PLAN.md
 
-Progress: [████████████████████░░] 68% (17/25 plans complete)
+Progress: [████████████████████░░] 72% (18/25 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 17
-- Average duration: 3.0 min
-- Total execution time: 0.85 hours
+- Total plans completed: 18
+- Average duration: 2.9 min
+- Total execution time: 0.87 hours
 
 **By Phase:**
 
@@ -33,10 +33,10 @@ Progress: [████████████████████░░] 6
 | 04-session-management | 2 | 3min | 1.5min |
 | 05-documentation | 2 | 4.4min | 2.2min |
 | 06-rename-to-klotho | 3 | 3min | 1min |
-| 07-rust-rewrite | 5 | 17min | 3.4min |
+| 07-rust-rewrite | 6 | 18.4min | 3.1min |
 
 **Recent Trend:**
-- Phase 7 Plan 04: Start command with interactive selection and auto-build complete
+- Phase 7 Plan 07: Release infrastructure with GitHub Actions and installer complete
 
 *Updated after each plan completion*
 
@@ -105,6 +105,11 @@ Recent decisions affecting current work:
 | 07-04 | Auto-build prompt when image missing | Prevents cryptic errors, guides users to build with dialoguer::Confirm (default No) |
 | 07-04 | Support KLOTHO_* env vars with legacy fallback | KLOTHO_KOB and KLOTHO_MOUNTS preferred over AGENT_SESSION_* with deprecation notices |
 | 07-04 | Optional mounts only added if directories exist | Checks PathBuf::exists() before mounting ~/.claude, ~/.config/opencode, ~/.config/zellij |
+| 07-07 | Use cross for Linux musl builds | Static musl binaries provide better portability across Linux distributions |
+| 07-07 | Generate SHA256 checksums for all binaries | Security best practice to verify download integrity |
+| 07-07 | Wrap installer in main() function | Safety measure prevents partial execution if curl pipe interrupted |
+| 07-07 | Support both curl and wget in installer | Maximizes compatibility across different systems |
+| 07-07 | Warn when install directory not in PATH | Better UX - users know immediately if they need to update shell profile |
 
 ### Pending Todos
 
@@ -122,11 +127,12 @@ None yet.
 
 - Phase 6 added: Rename to Klotho (rebrand project and CLI from agent-session to klotho)
 - Phase 7 added: Rust Rewrite (migrate bash script to Rust for maintainability and single-binary distribution)
+- Phase 8 added: Docs Cleanup
 
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 07-04-PLAN.md
+Stopped at: Completed 07-07-PLAN.md
 Resume file: None
 
-**Phase 7 Progress:** Start command complete with interactive agent selection, auto-build prompts, and Zellij attachment. Creates containers with proper mounts (project paths, KLOTHO_KOB, KLOTHO_MOUNTS, optional directories). Handles existing sessions (running/stopped) and creates new sessions. Supports both new (klotho-session-*) and legacy naming. Only 07-08 (Integration Testing) remains.
+**Phase 7 Progress:** Release infrastructure complete with GitHub Actions multi-platform builds and curl | sh installer. CI/CD builds static binaries for Linux (x64/arm64), macOS (x64/arm64), and Windows x64 with SHA256 checksums. Installer detects platform and verifies checksums. Only 07-08 (Integration Testing) remains.
