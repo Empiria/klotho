@@ -1,4 +1,5 @@
 use crate::agent::AgentConfig;
+use crate::resources;
 use anyhow::{Context, Result};
 use std::env;
 use std::fs;
@@ -40,86 +41,35 @@ pub fn get_config_home() -> (PathBuf, bool) {
     (klotho_config, false)
 }
 
-/// Get repository config directory
-///
-/// Resolves script location by following symlinks and returns config/agents path
-pub fn get_repo_config_dir() -> Result<PathBuf> {
-    // Try to find config relative to current executable
-    let exe = env::current_exe().context("failed to get current executable path")?;
-    let exe_dir = exe
-        .parent()
-        .context("failed to get parent directory of executable")?;
-
-    // In development, executable is in target/debug or target/release
-    // In production, it should be in the repo root or a bin directory
-    let mut search_paths = vec![
-        exe_dir.to_path_buf(),                 // Same directory as executable
-        exe_dir.join(".."),                    // Parent of executable
-        exe_dir.join("../.."),                 // Two levels up (for target/debug)
-        PathBuf::from("."),                    // Current working directory
-        env::current_dir().unwrap_or_default(), // Explicit current directory
-    ];
-
-    // Also check if we're in a git repository
-    if let Ok(output) = std::process::Command::new("git")
-        .args(["rev-parse", "--show-toplevel"])
-        .output()
-    {
-        if output.status.success() {
-            if let Ok(git_root) = String::from_utf8(output.stdout) {
-                search_paths.push(PathBuf::from(git_root.trim()));
-            }
-        }
-    }
-
-    for base in search_paths {
-        let config_dir = base.join("config/agents");
-        if config_dir.exists() {
-            return Ok(config_dir);
-        }
-    }
-
-    anyhow::bail!(
-        "could not find config/agents directory\n\
-         searched relative to executable and current directory"
-    )
-}
-
 /// Load agent config with XDG-style layering
 ///
-/// Loads repo default config first, then overlays user config if present.
-/// Repo config is required, user config is optional.
+/// Priority (highest to lowest):
+/// 1. User config in ~/.config/klotho/agents/<agent>/config.conf
+/// 2. User config in ~/.config/agent-session/agents/<agent>/config.conf (legacy)
+/// 3. Embedded default config (compiled into binary)
 ///
 /// Returns (config, used_legacy_path)
 pub fn load_agent_config(agent: &str) -> Result<(AgentConfig, bool)> {
-    let repo_config_dir = get_repo_config_dir()?;
-    let repo_config_path = repo_config_dir.join(agent).join("config.conf");
+    // Load embedded default first (must exist)
+    let embedded_content = resources::get_agent_config(agent).map_err(|_| {
+        let available = resources::list_embedded_agents().join(", ");
+        anyhow::anyhow!("unknown agent: {}\navailable agents: {}", agent, available)
+    })?;
 
-    // Load repo default first (must exist)
-    if !repo_config_path.exists() {
-        anyhow::bail!(
-            "no default config found for agent: {}\nexpected: {}",
-            agent,
-            repo_config_path.display()
-        );
-    }
-
-    let repo_content = fs::read_to_string(&repo_config_path)
-        .context("failed to read repo config file")?;
-    let mut config = AgentConfig::from_keyvalue(&repo_content)
-        .context("failed to parse repo config")?;
+    let mut config =
+        AgentConfig::from_keyvalue(&embedded_content).context("failed to parse embedded config")?;
 
     // Check for user config override
     let (config_home, is_legacy) = get_config_home();
     let user_config_path = config_home.join("agents").join(agent).join("config.conf");
 
     if user_config_path.exists() {
-        let user_content = fs::read_to_string(&user_config_path)
-            .context("failed to read user config file")?;
-        let user_config = AgentConfig::from_keyvalue(&user_content)
-            .context("failed to parse user config")?;
+        let user_content =
+            fs::read_to_string(&user_config_path).context("failed to read user config file")?;
+        let user_config =
+            AgentConfig::from_keyvalue(&user_content).context("failed to parse user config")?;
 
-        // Merge user config on top of repo config
+        // Merge user config on top of embedded config
         for (key, value) in user_config {
             config.insert(key, value);
         }
