@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Phase: 9 of 9 (Refactor KLOTHO_KOB)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-01-27 - Completed 09-01-PLAN.md
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-01-27 - Completed 09-02-PLAN.md
 
-Progress: [████████████████████░] 74% (20/27 milestone plans)
+Progress: [█████████████████████] 78% (21/27 milestone plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 20
+- Total plans completed: 21
 - Average duration: 2.7 min
-- Total execution time: 0.97 hours
+- Total execution time: 1.0 hours
 
 **By Phase:**
 
@@ -34,10 +34,10 @@ Progress: [████████████████████░] 74% 
 | 05-documentation | 2 | 4.4min | 2.2min |
 | 06-rename-to-klotho | 3 | 3min | 1min |
 | 07-rust-rewrite | 8 | 26min | 3.25min |
-| 09-refactor-klotho-kob | 1 | 1min | 1min |
+| 09-refactor-klotho-kob | 2 | 2.4min | 1.2min |
 
 **Recent Trend:**
-- Phase 9 in progress: 1/2 plans complete. Added CLI flag infrastructure for KLOTHO_LINKED_DIRS feature.
+- Phase 9 complete: 2/2 plans finished. KLOTHO_LINKED_DIRS feature fully implemented with correct same-path mounting for symlink resolution.
 
 *Updated after each plan completion*
 
@@ -113,6 +113,10 @@ Recent decisions affecting current work:
 | 07-07 | Warn when install directory not in PATH | Better UX - users know immediately if they need to update shell profile |
 | 09-01 | Use Vec<String> for repeatable --linked-dir flag | clap automatically handles collection of repeated flags |
 | 09-01 | Use .. pattern in match to ignore linked_dirs field | Flag added to CLI interface but not yet consumed by start command until plan 09-02 |
+| 09-02 | Mount linked directories at canonical host path | Required for symlink resolution; container must see same absolute paths as host |
+| 09-02 | Parse KLOTHO_LINKED_DIRS as colon-separated | Follows Unix PATH convention, familiar to users |
+| 09-02 | Merge CLI flags with env var | CLI flags extend environment variable values (not replace) |
+| 09-02 | Remove all legacy environment variable support | Clean break; deprecated variables had warnings in phase 7 |
 
 ### Pending Todos
 
@@ -136,7 +140,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 09-01-PLAN.md
+Stopped at: Completed 09-02-PLAN.md
 Resume file: None
 
-**Phase 9 In Progress:** Refactoring KLOTHO_KOB environment variable. Plan 09-01 complete: Added --linked-dir CLI flag infrastructure and removed deprecated bash script. Ready for plan 09-02 to wire flag to start command.
+**Phase 9 Complete:** KLOTHO_KOB refactoring finished. Both plans complete: 09-01 added CLI flag infrastructure, 09-02 implemented KLOTHO_LINKED_DIRS with correct same-path mounting and removed all legacy environment variable support. Symlinks in workspaces now resolve correctly inside containers.
