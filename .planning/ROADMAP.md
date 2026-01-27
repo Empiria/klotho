@@ -168,18 +168,24 @@ Plans:
 [To be added during planning]
 
 ### Phase 9: Refactor KLOTHO_KOB
-**Goal**: [To be planned]
+**Goal**: Linked directories feature renamed to KLOTHO_LINKED_DIRS with correct mount behavior, legacy environment variables removed, bash script deleted
 **Depends on**: Phase 8
 **Requirements**: None (new scope)
 **Success Criteria** (what must be TRUE):
-  1. TBD (run /gsd:plan-phase 9 to break down)
-**Plans**: 0 plans
+  1. KLOTHO_LINKED_DIRS environment variable is parsed as colon-separated paths
+  2. --linked-dir CLI flag supports multiple directories via repetition
+  3. Directories are mounted at canonical host path for symlink resolution
+  4. All legacy environment variables removed (KLOTHO_KOB, AGENT_SESSION_*)
+  5. Bash script deleted from repository
+  6. README documents the feature with examples
+**Plans**: 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 9 to break down)
+- [ ] 09-01-PLAN.md — Add --linked-dir CLI flag and delete bash script
+- [ ] 09-02-PLAN.md — Fix mount logic, remove legacy variables, update documentation
 
 **Details:**
-[To be added during planning]
+Rename KLOTHO_KOB to KLOTHO_LINKED_DIRS with self-explanatory naming. Fix the Rust implementation bug where directories were mounted at /home/agent/.klotho instead of at the same path as the host (which breaks symlinks). Add repeatable --linked-dir CLI flag for per-command override. Remove all legacy environment variable support (KLOTHO_KOB, AGENT_SESSION_*) for a clean break. Delete the deprecated bash script entirely since the Rust version is now canonical. Document the feature properly in README.
 
 ## Progress
 
@@ -196,4 +202,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 | 6. Rename to Klotho | 3/3 | Complete | 2026-01-27 |
 | 7. Rust Rewrite | 8/8 | Complete | 2026-01-27 |
 | 8. Docs Cleanup | 0/0 | Not started | - |
-| 9. Refactor KLOTHO_KOB | 0/0 | Not started | - |
+| 9. Refactor KLOTHO_KOB | 0/2 | Not started | - |
