@@ -16,6 +16,7 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Start { agent, name, paths } => {
             println!("start: agent={}, name={}, paths={:?}", agent, name, paths);
+
             todo!("Implement start command")
         }
         Commands::Stop { name } => {
