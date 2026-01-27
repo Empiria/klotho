@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
+# Resolve script directory (follow symlinks)
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+
 show_help() {
     cat << 'EOF'
 Usage: agent-session [-a AGENT] [-n NAME] [project-paths...]
@@ -32,13 +35,19 @@ Environment variables:
   AGENT_SESSION_MOUNTS    Extra host paths to mount (colon-separated)
                           Paths are mounted at the same location in container.
                           Example: AGENT_SESSION_MOUNTS="$HOME/dotfiles:$HOME/scripts"
+
+  AGENT_SESSION_KOB       Path to kob repo for projects with symlinks to external
+                          planning/config repos. Mounted at same path in container
+                          so existing symlinks resolve correctly.
+                          Example: AGENT_SESSION_KOB="/home/user/projects/my-kob-repo"
+                          Tip: Use direnv to set this per-project in .envrc
 EOF
 }
 
 # Discover available agents from config directories
 discover_agents() {
     mapfile -t agents < <(
-        find ./config/agents -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null \
+        find $SCRIPT_DIR/config/agents -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null \
         | LC_COLLATE=C sort
     )
 
@@ -176,7 +185,7 @@ ensure_agent_built() {
         answer="${answer:-N}"
         if [[ "$answer" =~ ^[Yy]$ ]]; then
             echo "Building ${agent}..."
-            ./scripts/build.sh "$agent" || {
+            $SCRIPT_DIR/scripts/build.sh "$agent" || {
                 echo "error: build failed" >&2
                 exit 1
             }
@@ -192,7 +201,7 @@ load_agent_config() {
     local agent="$1"
     local config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
     local user_config="$config_home/agent-session/agents/$agent/config.conf"
-    local repo_config="./config/agents/$agent/config.conf"
+    local repo_config="$SCRIPT_DIR/config/agents/$agent/config.conf"
 
     # Load repo default first (must exist)
     if [[ ! -f "$repo_config" ]]; then
@@ -225,17 +234,18 @@ load_agent_config "$AGENT_TYPE" || exit 1
 # Ensure image is built
 ensure_agent_built "$AGENT_TYPE"
 
-CONTAINER_NAME="agent-${SESSION_NAME}"
+CONTAINER_NAME="${AGENT_TYPE}-${SESSION_NAME}"
 IMAGE_NAME="agent-session-${AGENT_TYPE}:latest"
 
 # Helper to attach or create zellij session
+# After zellij exits: if session still exists (detach), return to host; if gone (quit), drop to shell
 attach_zellij() {
     # Strip ANSI color codes when checking for existing sessions
     if podman exec "$CONTAINER_NAME" zellij list-sessions 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -q "^$SESSION_NAME "; then
-        podman exec -it "$CONTAINER_NAME" zellij attach "$SESSION_NAME"
+        podman exec -it "$CONTAINER_NAME" bash -c "zellij attach '$SESSION_NAME'; zellij list-sessions 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -q '^$SESSION_NAME ' || exec $AGENT_SHELL"
     else
         # Start new session with agent wrapper as the shell (runs agent, then drops to configured shell)
-        podman exec -it -e SHELL=/home/agent/.local/bin/${AGENT_NAME}-session -e AGENT_LAUNCH_CMD="$AGENT_LAUNCH_CMD" "$CONTAINER_NAME" zellij -s "$SESSION_NAME"
+        podman exec -it -e SHELL=/home/agent/.local/bin/${AGENT_NAME}-session -e AGENT_LAUNCH_CMD="$AGENT_LAUNCH_CMD" "$CONTAINER_NAME" bash -c "zellij -s '$SESSION_NAME'; zellij list-sessions 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -q '^$SESSION_NAME ' || exec $AGENT_SHELL"
     fi
 }
 
@@ -274,9 +284,20 @@ FIRST_DIR=""
 for path in "${PATHS[@]}"; do
     abs_path=$(realpath "$path")
     dir_name=$(basename "$abs_path")
-    MOUNTS="$MOUNTS -v $abs_path:/workspace/$dir_name:Z"
-    [[ -z "$FIRST_DIR" ]] && FIRST_DIR="/workspace/$dir_name"
+    container_path="/workspace/$dir_name"
+    MOUNTS="$MOUNTS -v $abs_path:$container_path:Z"
+    [[ -z "$FIRST_DIR" ]] && FIRST_DIR="$container_path"
 done
+
+# Mount kob repo at same path so symlinks resolve correctly
+KOB_MOUNT=""
+if [[ -n "${AGENT_SESSION_KOB:-}" ]]; then
+    if [[ -d "$AGENT_SESSION_KOB" ]]; then
+        KOB_MOUNT="-v $AGENT_SESSION_KOB:$AGENT_SESSION_KOB:Z"
+    else
+        echo "warning: AGENT_SESSION_KOB path does not exist: $AGENT_SESSION_KOB" >&2
+    fi
+fi
 
 # Build extra mounts from AGENT_SESSION_MOUNTS env var
 EXTRA_MOUNTS=""
@@ -300,9 +321,9 @@ OPTIONAL_MOUNTS=""
 [[ -d "$HOME/.config/zellij" ]] && OPTIONAL_MOUNTS="$OPTIONAL_MOUNTS -v $HOME/.config/zellij:/config/zellij:ro"
 
 # Mount bundled OpenCode MCP config if no user config exists
-if [[ "$AGENT_TYPE" == "opencode" ]] && [[ ! -d "$HOME/.config/opencode" ]] && [[ -f "./config/agents/opencode/opencode.json" ]]; then
+if [[ "$AGENT_TYPE" == "opencode" ]] && [[ ! -d "$HOME/.config/opencode" ]] && [[ -f "$SCRIPT_DIR/config/agents/opencode/opencode.json" ]]; then
     mkdir -p /tmp/opencode-config
-    cp ./config/agents/opencode/opencode.json /tmp/opencode-config/
+    cp $SCRIPT_DIR/config/agents/opencode/opencode.json /tmp/opencode-config/
     OPTIONAL_MOUNTS="$OPTIONAL_MOUNTS -v /tmp/opencode-config:/config/opencode:Z"
 fi
 
@@ -315,6 +336,7 @@ podman run -d \
     $OPTIONAL_MOUNTS \
     $EXTRA_MOUNTS \
     $MOUNTS \
+    $KOB_MOUNT \
     "$IMAGE_NAME" \
     bash -c 'trap "exit 0" TERM; while :; do sleep 1; done'
 
