@@ -19,29 +19,27 @@ Download the latest release from [GitHub Releases](https://github.com/Empiria/kl
 
 ## Quick Start
 
-**1. Create your Claude API credentials:**
-```bash
-cat > ~/.claude.json << 'EOF'
-{
-  "apiKey": "your-anthropic-api-key-here"
-}
-EOF
-chmod 600 ~/.claude.json
-```
+**1. Set up your agent locally first**
 
-Get your API key from the [Anthropic Console](https://console.anthropic.com/).
+Klotho mounts your local configuration into containers, so you need your chosen agent working on your host machine first:
 
-**2. Build the Claude agent image:**
+- **Claude Code:** Install and authenticate per [Claude Code docs](https://docs.anthropic.com/en/docs/claude-code)
+- **OpenCode:** Install and configure per [OpenCode docs](https://opencode.ai/)
+
+Your existing `~/.claude.json`, `~/.claude/`, `~/.config/opencode/`, etc. will be mounted into the container automatically.
+
+**2. Build the agent image:**
 ```bash
-klotho build claude
+klotho build claude    # or: klotho build opencode
 ```
 
 **3. Start a session:**
 ```bash
-klotho start ~/projects/my-app
+klotho start ~/projects/my-app                 # defaults to claude
+klotho start -a opencode ~/projects/my-app     # use opencode instead
 ```
 
-That's it. You're now in a containerized Claude Code session with your project mounted at `/workspace`.
+That's it. You're now in a containerized agent session with your project mounted at `/workspace`.
 
 **Detach anytime:** Press `Ctrl+C` or close your terminal — the session keeps running.
 
@@ -67,10 +65,11 @@ klotho start
   podman machine init && podman machine start
   ```
 
-- **Claude API key** — `~/.claude.json` file (see Quick Start)
+- **A working AI agent** — Claude Code or OpenCode configured locally (see Quick Start)
 
 **Optional:**
-- `~/.claude/` — Custom Claude Code settings, MCP configs
+- `~/.claude/` — Custom Claude Code settings, MCP configs (mounted automatically)
+- `~/.config/opencode/` — OpenCode configuration (mounted automatically)
 - `~/.config/zellij/` — Custom Zellij layouts (copied into container)
 
 ## Concepts
@@ -337,14 +336,15 @@ klotho rm SESSION_NAME
 
 ### Container fails to start
 
-1. Verify `~/.claude.json` exists with valid JSON
-2. Check file permissions: `chmod 600 ~/.claude.json`
-3. Rebuild the image: `klotho rebuild claude`
+1. Verify your agent works locally first (run `claude` or `opencode` outside klotho)
+2. Check that config files exist (`~/.claude.json` for Claude, `~/.config/opencode/` for OpenCode)
+3. Rebuild the image: `klotho rebuild claude` (or `klotho rebuild opencode`)
 
 ## About
 
-**Name origin:** In Greek mythology, Klotho is one of the Three Fates who spins the thread of life — reflecting this tool's purpose of spinning up and managing AI agent session lifecycles.
+**Name origin:** In Greek mythology, [Klotho](https://en.wikipedia.org/wiki/Clotho) is one of the Three Fates who spins the thread of life — reflecting this tool's purpose of spinning up and managing AI agent session lifecycles.
 
 **Links:**
 - [GitHub Repository](https://github.com/Empiria/klotho)
-- [Anthropic Console](https://console.anthropic.com/) (for API keys)
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+- [OpenCode](https://opencode.ai/)
