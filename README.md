@@ -385,3 +385,201 @@ Remove the "frontend" session without confirmation.
 - Use `agent-session ls` to see which sessions exist
 
 </details>
+
+## Troubleshooting
+
+### "podman: command not found"
+
+**Cause:** Podman is not installed or not in your PATH.
+
+**Solution:**
+
+**Linux (Debian/Ubuntu):**
+```bash
+sudo apt update
+sudo apt install podman
+```
+
+**Linux (Fedora):**
+```bash
+sudo dnf install podman
+```
+
+**macOS:**
+```bash
+brew install podman
+```
+
+After installation on macOS, initialize and start the podman machine:
+```bash
+podman machine init
+podman machine start
+```
+
+**Verify installation:**
+```bash
+podman --version
+```
+
+Expected: `podman version 4.x.x` or higher
+
+### "Cannot connect to Podman" or "unable to connect to Podman socket" (macOS)
+
+**Symptom:** Error message when trying to run podman commands on macOS.
+
+**Cause:** The podman machine is not running. On macOS, Podman runs containers inside a lightweight Linux VM that must be started before use.
+
+**Solution:**
+```bash
+podman machine start
+```
+
+**Verify:**
+```bash
+podman machine list
+```
+
+You should see a running machine in the output.
+
+### "Error: unable to look up current user" or UID mapping errors
+
+**Symptom:** Errors related to user ID mapping or rootless container configuration.
+
+**Cause:** Podman's rootless setup is incomplete or misconfigured.
+
+**Solution:**
+
+1. Check that your user has subordinate UID/GID ranges configured:
+```bash
+grep $USER /etc/subuid
+grep $USER /etc/subgid
+```
+
+Each should show a range like `username:100000:65536`.
+
+2. If missing, add them (requires root):
+```bash
+sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 $USER
+```
+
+3. Run the migration command:
+```bash
+podman system migrate
+```
+
+**Verify:**
+```bash
+podman run --rm alpine id
+```
+
+Should show uid and gid mappings without errors.
+
+### "session 'X' not found"
+
+**Symptom:** Error message when trying to stop, restart, or remove a session.
+
+**Cause:** The session doesn't exist, or there's a typo in the session name.
+
+**Solution:**
+```bash
+agent-session ls
+```
+
+This shows all available sessions and their current status.
+
+**Verify:** Check that the session name matches exactly (case-sensitive).
+
+### "cannot remove running session"
+
+**Symptom:** Error when trying to `agent-session rm` a session.
+
+**Cause:** You're trying to remove a session that's currently running.
+
+**Solution:**
+
+Stop the session first:
+```bash
+agent-session stop SESSION_NAME
+```
+
+Then remove it:
+```bash
+agent-session rm SESSION_NAME
+```
+
+**Verify:**
+```bash
+agent-session ls
+```
+
+The session should show as "stopped" before removal.
+
+### "Image not built. Build now?"
+
+**Symptom:** Prompt appears when trying to start a session for the first time.
+
+**Cause:** The container image for the selected agent hasn't been built yet.
+
+**Solution:**
+
+Option 1 - Answer 'y' to the prompt and the image will be built automatically.
+
+Option 2 - Build manually before starting:
+```bash
+./scripts/build.sh claude
+```
+
+or for OpenCode:
+```bash
+./scripts/build.sh opencode
+```
+
+**Note:** First build takes 2-3 minutes to download and configure all tools.
+
+**Verify:**
+```bash
+podman images | grep agent-session
+```
+
+You should see `agent-session-claude` and/or `agent-session-opencode` in the output.
+
+### Container fails to start or won't attach
+
+**Symptom:** Session starts but immediately exits, or `agent-session start` hangs.
+
+**Cause:** Missing required credentials or configuration files.
+
+**Solution:**
+
+1. Verify Claude API credentials exist:
+```bash
+test -f ~/.claude.json && echo "Found" || echo "Missing"
+```
+
+If missing, create it (see Prerequisites section).
+
+2. Check that the file has correct permissions:
+```bash
+ls -l ~/.claude.json
+```
+
+Should show `-rw-------` (600 permissions).
+
+3. Verify the JSON format is valid:
+```bash
+cat ~/.claude.json
+```
+
+Should look like:
+```json
+{
+  "apiKey": "your-api-key-here"
+}
+```
+
+**Verify:**
+```bash
+agent-session start
+```
+
+Should create and attach to the session without errors.
