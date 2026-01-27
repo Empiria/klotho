@@ -95,6 +95,7 @@ klotho start [-a AGENT] [-n NAME] [project-paths...]
 **Options:**
 - `-a, --agent AGENT` — Agent to use (default: claude)
 - `-n, --name NAME` — Session name (default: default)
+- `--linked-dir DIR` — Directory to mount at same path (repeatable, for symlinks)
 
 **Examples:**
 ```bash
@@ -105,10 +106,24 @@ klotho start -n fullstack ~/fe ~/be       # Multiple directories
 klotho start -a opencode ~/project        # Different agent
 ```
 
+**Linked Directories:**
+
+When your workspace contains symlinks to external directories, those directories must be mounted at the same path inside the container for the symlinks to resolve:
+
+```bash
+# Using environment variable (colon-separated)
+export KLOTHO_LINKED_DIRS="/home/user/shared-tools:/home/user/team-configs"
+klotho start ~/project
+
+# Using CLI flag (repeatable)
+klotho start --linked-dir /home/user/shared-tools --linked-dir /home/user/team-configs ~/project
+```
+
+The symlinks themselves can be excluded from git via `.git/info/exclude`.
+
 **Notes:**
 - Sessions persist across terminal disconnects
 - Omit `-a` to see interactive agent menu
-- Environment variables: `KLOTHO_MOUNTS`, `KLOTHO_KOB` (see `klotho start --help`)
 
 </details>
 
@@ -253,8 +268,8 @@ AGENT_ENV_VARS="PATH=/home/agent/.local/bin:\$PATH SHELL=/usr/bin/fish"
 
 | Variable | Purpose |
 |----------|---------|
-| `KLOTHO_MOUNTS` | Additional mount specifications |
-| `KLOTHO_KOB` | Keep-container-open behavior control |
+| `KLOTHO_MOUNTS` | Additional mount specifications (comma-separated, e.g., `/host/path:/container/path:Z`) |
+| `KLOTHO_LINKED_DIRS` | Directories mounted at same path for symlink resolution (colon-separated) |
 
 See `klotho start --help` for details.
 
