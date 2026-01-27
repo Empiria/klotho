@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build script for agent-specific container images
+# Build script for Klotho agent container images
 # Usage: ./scripts/build.sh <agent-name>
 set -euo pipefail
 
@@ -39,7 +39,15 @@ validate_config() {
 load_agent_config() {
     local agent="$1"
     local config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
-    local user_config="$config_home/agent-session/agents/$agent/config.conf"
+    # Check klotho config first (preferred), then legacy agent-session
+    local user_config=""
+    if [[ -f "$config_home/klotho/agents/$agent/config.conf" ]]; then
+        user_config="$config_home/klotho/agents/$agent/config.conf"
+    elif [[ -f "$config_home/agent-session/agents/$agent/config.conf" ]]; then
+        user_config="$config_home/agent-session/agents/$agent/config.conf"
+        echo "Note: Using legacy config path ~/.config/agent-session/"
+        echo "      Consider moving to ~/.config/klotho/"
+    fi
     local repo_config="./config/agents/$agent/config.conf"
 
     # Load repo default first (must exist)
@@ -53,7 +61,7 @@ load_agent_config() {
     source "$repo_config"
 
     # Override with user config if present
-    if [[ -f "$user_config" ]]; then
+    if [[ -n "$user_config" && -f "$user_config" ]]; then
         echo "Loading user config override: $user_config"
         validate_config "$user_config" || return 1
         source "$user_config"
@@ -121,7 +129,7 @@ main() {
     # Build with config injection
     echo ""
     echo "Building container image with target: $AGENT_NAME"
-    echo "Image tag: agent-session-${AGENT_NAME}:latest"
+    echo "Image tag: klotho-${AGENT_NAME}:latest"
     echo ""
 
     podman build \
@@ -130,11 +138,11 @@ main() {
         --build-arg AGENT_INSTALL_CMD="$AGENT_INSTALL_CMD" \
         --build-arg AGENT_SHELL="$AGENT_SHELL" \
         --build-arg AGENT_LAUNCH_CMD="$AGENT_LAUNCH_CMD" \
-        -t "agent-session-${AGENT_NAME}:latest" \
+        -t "klotho-${AGENT_NAME}:latest" \
         .
 
     echo ""
-    echo "Build complete: agent-session-${AGENT_NAME}:latest"
+    echo "Build complete: klotho-${AGENT_NAME}:latest"
 }
 
 main
