@@ -95,6 +95,7 @@ None yet.
 ## Roadmap Evolution
 
 - Phase 6 added: Rename to Klotho (rebrand project and CLI from agent-session to klotho)
+- Phase 7 added: Rust Rewrite (migrate bash script to Rust for maintainability and single-binary distribution)
 
 ## Session Continuity
 

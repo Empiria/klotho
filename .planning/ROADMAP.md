@@ -18,6 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Session Management** - Essential container lifecycle commands
 - [x] **Phase 5: Documentation** - Quick start guide and usage reference
 - [ ] **Phase 6: Rename to Klotho** - Rebrand project and CLI from agent-session to klotho
+- [ ] **Phase 7: Rust Rewrite** - Migrate bash script to Rust for better maintainability and single-binary distribution
 
 ## Phase Details
 
@@ -121,6 +122,26 @@ Plans:
 - [ ] 06-02-PLAN.md — Build system and container naming (image tags, dual detection)
 - [ ] 06-03-PLAN.md — Documentation updates (README with name explanation, PREREQUISITES, AGENTS.md)
 
+### Phase 7: Rust Rewrite
+**Goal**: CLI tool rewritten in Rust for better maintainability and single-binary distribution
+**Depends on**: Phase 6
+**Requirements**: None (new scope)
+**Success Criteria** (what must be TRUE):
+  1. Rust CLI provides all commands from bash version (start, stop, restart, ls, rm)
+  2. Single static binary with no runtime dependencies
+  3. Argument parsing and help text matches or improves on bash version
+  4. Config file loading works identically to bash version
+  5. Podman container management works correctly
+  6. Zellij session attachment works correctly
+  7. Legacy naming migration continues to work during transition
+**Plans**: 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 7 to break down)
+
+**Details:**
+Rewrite the klotho bash script (~855 lines) in Rust to improve maintainability and enable single-binary distribution. The bash script has grown complex with argument parsing, config validation, container management, and legacy migration logic. Rust provides better error handling, proper data structures, and distributes as a single binary via GitHub releases or cargo install.
+
 ## Progress
 
 **Execution Order:**
@@ -134,3 +155,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 4. Session Management | 2/2 | Complete | 2026-01-27 |
 | 5. Documentation | 2/2 | Complete | 2026-01-27 |
 | 6. Rename to Klotho | 0/3 | Not started | - |
+| 7. Rust Rewrite | 0/? | Not started | - |
