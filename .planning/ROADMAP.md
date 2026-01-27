@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Agent Abstraction** - Extract agent definitions into config-driven architecture
 - [x] **Phase 3: Multi-Agent Support** - Add OpenCode and interactive agent selection
 - [x] **Phase 4: Session Management** - Essential container lifecycle commands
-- [ ] **Phase 5: Documentation** - Quick start guide and usage reference
+- [x] **Phase 5: Documentation** - Quick start guide and usage reference
 - [ ] **Phase 6: Rename to Klotho** - Rebrand project and CLI from agent-session to klotho
 
 ## Phase Details
@@ -101,8 +101,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — README foundation: overview, prerequisites, concepts, quick start
-- [ ] 05-02-PLAN.md — Command reference and troubleshooting sections
+- [x] 05-01-PLAN.md — README foundation: overview, prerequisites, concepts, quick start
+- [x] 05-02-PLAN.md — Command reference and troubleshooting sections
 
 ### Phase 6: Rename to Klotho
 **Goal**: Project and CLI tool renamed from "agent-session" to "klotho"
@@ -132,5 +132,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 2. Agent Abstraction | 4/4 | Complete | 2026-01-26 |
 | 3. Multi-Agent Support | 3/3 | Complete | 2026-01-26 |
 | 4. Session Management | 2/2 | Complete | 2026-01-27 |
-| 5. Documentation | 0/2 | Not started | - |
+| 5. Documentation | 2/2 | Complete | 2026-01-27 |
 | 6. Rename to Klotho | 0/3 | Not started | - |

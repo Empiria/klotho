@@ -14,10 +14,10 @@
 
 ### Session Management
 
-- [ ] **SES-01**: User can stop a running agent session
-- [ ] **SES-02**: User can restart a stopped agent session
-- [ ] **SES-03**: User can list all agent sessions with their status (running/stopped)
-- [ ] **SES-04**: User can remove old/stopped containers to clean up
+- [x] **SES-01**: User can stop a running agent session
+- [x] **SES-02**: User can restart a stopped agent session
+- [x] **SES-03**: User can list all agent sessions with their status (running/stopped)
+- [x] **SES-04**: User can remove old/stopped containers to clean up
 
 ### Agent Support
 
@@ -29,9 +29,9 @@
 
 ### Documentation
 
-- [ ] **DOC-01**: Quick start guide gets colleague to first successful command in <5 minutes
-- [ ] **DOC-02**: Installation guide lists all prerequisites with verification commands
-- [ ] **DOC-03**: Usage reference documents all commands and flags
+- [x] **DOC-01**: Quick start guide gets colleague to first successful command in <5 minutes
+- [x] **DOC-02**: Installation guide lists all prerequisites with verification commands
+- [x] **DOC-03**: Usage reference documents all commands and flags
 
 ---
 
@@ -77,13 +77,13 @@
 | AGT-02 | Phase 3 | Complete |
 | AGT-03 | Phase 3 | Complete |
 | AGT-04 | Phase 3 | Complete |
-| SES-01 | Phase 4 | Pending |
-| SES-02 | Phase 4 | Pending |
-| SES-03 | Phase 4 | Pending |
-| SES-04 | Phase 4 | Pending |
-| DOC-01 | Phase 5 | Pending |
-| DOC-02 | Phase 5 | Pending |
-| DOC-03 | Phase 5 | Pending |
+| SES-01 | Phase 4 | Complete |
+| SES-02 | Phase 4 | Complete |
+| SES-03 | Phase 4 | Complete |
+| SES-04 | Phase 4 | Complete |
+| DOC-01 | Phase 5 | Complete |
+| DOC-02 | Phase 5 | Complete |
+| DOC-03 | Phase 5 | Complete |
 
 ---
 
