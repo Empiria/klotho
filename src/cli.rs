@@ -17,9 +17,9 @@ pub struct Cli {
 pub enum Commands {
     /// Create a new session or attach to existing one
     Start {
-        /// Agent to use (default: "claude")
-        #[arg(short, long, default_value = "claude")]
-        agent: String,
+        /// Agent to use (interactive selection if not specified)
+        #[arg(short, long)]
+        agent: Option<String>,
 
         /// Session name (default: "default")
         #[arg(short, long, default_value = "default")]

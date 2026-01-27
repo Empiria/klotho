@@ -16,9 +16,8 @@ fn main() -> Result<()> {
 
     match cli.command {
         Commands::Start { agent, name, paths } => {
-            println!("start: agent={}, name={}, paths={:?}", agent, name, paths);
-
-            todo!("Implement start command")
+            commands::start::run(agent, name, paths, runtime_override)?;
+            Ok(())
         }
         Commands::Stop { name } => {
             commands::stop::run(name, runtime_override)?;
