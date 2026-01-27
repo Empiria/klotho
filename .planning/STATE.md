@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** Consistent, reproducible agent environments that enable seamless handoff between people and agents through committed artifacts.
-**Current focus:** Phase 5 - Documentation (Complete)
+**Current focus:** Phase 6 - Rename to Klotho (Complete)
 
 ## Current Position
 
-Phase: 5 of 6 (Documentation)
-Plan: 2 of 2 in current phase
+Phase: 6 of 7 (Rename to Klotho)
+Plan: 3 of 3 in current phase
 Status: Phase complete
-Last activity: 2026-01-27 - Phase 5 complete
+Last activity: 2026-01-27 - Phase 6 complete
 
-Progress: [████████████████████] 100% (Phase 5 complete)
+Progress: [████████████████████] 100% (Phase 6 complete)
 
 ## Performance Metrics
 
@@ -100,7 +100,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Phase 5 complete
+Stopped at: Phase 6 complete
 Resume file: None
 
-**Phase 5 Complete:** README.md documentation with overview, prerequisites, quick start, concepts, command reference, and troubleshooting. Ready for Phase 6 (Rename to Klotho).
+**Phase 6 Complete:** Project renamed from agent-session to Klotho. CLI command, container images, config paths, and documentation all use new naming with backward compatibility for legacy sessions. Ready for Phase 7 (Rust Rewrite).

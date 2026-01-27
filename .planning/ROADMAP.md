@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Multi-Agent Support** - Add OpenCode and interactive agent selection
 - [x] **Phase 4: Session Management** - Essential container lifecycle commands
 - [x] **Phase 5: Documentation** - Quick start guide and usage reference
-- [ ] **Phase 6: Rename to Klotho** - Rebrand project and CLI from agent-session to klotho
+- [x] **Phase 6: Rename to Klotho** - Rebrand project and CLI from agent-session to klotho
 - [ ] **Phase 7: Rust Rewrite** - Migrate bash script to Rust for better maintainability and single-binary distribution
 
 ## Phase Details
@@ -118,9 +118,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 06-01-PLAN.md — Core CLI rename (script file, help text, XDG paths, symlink)
-- [ ] 06-02-PLAN.md — Build system and container naming (image tags, dual detection)
-- [ ] 06-03-PLAN.md — Documentation updates (README with name explanation, PREREQUISITES, AGENTS.md)
+- [x] 06-01-PLAN.md — Core CLI rename (script file, help text, XDG paths, symlink)
+- [x] 06-02-PLAN.md — Build system and container naming (image tags, dual detection)
+- [x] 06-03-PLAN.md — Documentation updates (README with name explanation, PREREQUISITES, AGENTS.md)
 
 ### Phase 7: Rust Rewrite
 **Goal**: CLI tool rewritten in Rust for better maintainability and single-binary distribution
@@ -145,7 +145,7 @@ Rewrite the klotho bash script (~855 lines) in Rust to improve maintainability a
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -154,5 +154,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 3. Multi-Agent Support | 3/3 | Complete | 2026-01-26 |
 | 4. Session Management | 2/2 | Complete | 2026-01-27 |
 | 5. Documentation | 2/2 | Complete | 2026-01-27 |
-| 6. Rename to Klotho | 0/3 | Not started | - |
+| 6. Rename to Klotho | 3/3 | Complete | 2026-01-27 |
 | 7. Rust Rewrite | 0/? | Not started | - |
