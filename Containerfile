@@ -28,7 +28,8 @@ COPY --chmod=755 entrypoint.sh /entrypoint.sh
 USER agent
 
 # Ensure ~/.local/bin exists (native installers use this)
-RUN mkdir -p ~/.local/bin
+# Also create ~/.local/share/fish for history storage
+RUN mkdir -p ~/.local/bin ~/.local/share/fish
 
 # Configure fish: disable greeting, enable starship prompt
 RUN mkdir -p ~/.config/fish && printf '%s\n' \
