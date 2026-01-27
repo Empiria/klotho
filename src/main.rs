@@ -1,16 +1,17 @@
 use anyhow::Result;
 use clap::Parser;
 use klotho::cli::{Cli, Commands};
+use klotho::commands;
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Runtime override is available via cli.runtime
     // "auto" means auto-detect, otherwise use specified runtime
-    let _runtime_override = if cli.runtime == "auto" {
+    let runtime_override = if cli.runtime == "auto" {
         None
     } else {
-        Some(cli.runtime.clone())
+        Some(cli.runtime.as_str())
     };
 
     match cli.command {
@@ -20,28 +21,28 @@ fn main() -> Result<()> {
             todo!("Implement start command")
         }
         Commands::Stop { name } => {
-            println!("stop: name={}", name);
-            todo!("Implement stop command")
+            commands::stop::run(name, runtime_override)?;
+            Ok(())
         }
         Commands::Restart { name } => {
-            println!("restart: name={}", name);
-            todo!("Implement restart command")
+            commands::restart::run(name, runtime_override)?;
+            Ok(())
         }
         Commands::Ls => {
-            println!("ls");
-            todo!("Implement ls command")
+            commands::ls::run(runtime_override)?;
+            Ok(())
         }
         Commands::Rm { force, name } => {
-            println!("rm: force={}, name={}", force, name);
-            todo!("Implement rm command")
+            commands::rm::run(name, force, runtime_override)?;
+            Ok(())
         }
         Commands::Build { all, agents } => {
-            println!("build: all={}, agents={:?}", all, agents);
-            todo!("Implement build command")
+            commands::build::run(all, agents, false, runtime_override)?;
+            Ok(())
         }
         Commands::Rebuild { all, agents } => {
-            println!("rebuild: all={}, agents={:?}", all, agents);
-            todo!("Implement rebuild command")
+            commands::build::run(all, agents, true, runtime_override)?;
+            Ok(())
         }
     }
 }
