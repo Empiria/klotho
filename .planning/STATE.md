@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Phase: 7 of 7 (Rust Rewrite)
-Plan: 1 of 6 in current phase
+Plan: 3 of 8 in current phase
 Status: In progress
-Last activity: 2026-01-27 - Completed 07-01-PLAN.md
+Last activity: 2026-01-27 - Completed 07-03-PLAN.md
 
-Progress: [████████████████████░░] 52% (13/25 plans complete)
+Progress: [████████████████████░░] 56% (14/25 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 13
+- Total plans completed: 14
 - Average duration: 2.0 min
-- Total execution time: 0.60 hours
+- Total execution time: 0.63 hours
 
 **By Phase:**
 
@@ -33,10 +33,10 @@ Progress: [████████████████████░░] 5
 | 04-session-management | 2 | 3min | 1.5min |
 | 05-documentation | 2 | 4.4min | 2.2min |
 | 06-rename-to-klotho | 3 | 3min | 1min |
-| 07-rust-rewrite | 1 | 1min | 1min |
+| 07-rust-rewrite | 2 | 3min | 1.5min |
 
 **Recent Trend:**
-- Phase 7 started: Rust project initialized with clap-based CLI structure
+- Phase 7 Wave 2: Resources embedded into binary via rust-embed
 
 *Updated after each plan completion*
 
@@ -85,6 +85,10 @@ Recent decisions affecting current work:
 | 07-01 | Add global --runtime flag for Docker fallback | Plan specifies Docker fallback support; global flag ensures all commands can respect runtime override |
 | 07-01 | Include new build/rebuild commands with --all flag | Rust version provides opportunity to add container build commands not in bash version |
 | 07-01 | Stub implementations print args and use todo!() | Establishes command routing infrastructure while deferring implementation to later plans |
+| 07-03 | Use rust-embed derive macro for compile-time resource embedding | Compiles resources directly into binary, no runtime IO for resource access |
+| 07-03 | Extract to /tmp/klotho-build for builds | Container builds need actual files on disk, temp directory provides clean isolated context |
+| 07-03 | Auto-detect development vs production mode | Check for local config/ directory to decide whether to use embedded resources |
+| 07-03 | Force-add opencode.json despite gitignore | File needs to be embedded in binary even though it's gitignored in config/ |
 
 ### Pending Todos
 
@@ -106,7 +110,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 07-01-PLAN.md
+Stopped at: Completed 07-03-PLAN.md
 Resume file: None
 
-**Phase 7 Progress:** Rust project initialized with Cargo.toml and clap-based CLI structure. All 7 commands defined with proper help text. Global --runtime flag added for Docker fallback. Ready for 07-02 (Runtime Detection).
+**Phase 7 Progress:** Resources embedded into binary (Containerfile, entrypoint.sh, agent configs) via rust-embed. Binary can extract to temp directory for builds. Single-binary distribution ready. Wave 2 complete.
