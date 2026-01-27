@@ -15,8 +15,8 @@ fn main() -> Result<()> {
     };
 
     match cli.command {
-        Commands::Start { agent, name, paths, .. } => {
-            commands::start::run(agent, name, paths, runtime_override)?;
+        Commands::Start { agent, name, linked_dirs, paths } => {
+            commands::start::run(agent, name, linked_dirs, paths, runtime_override)?;
             Ok(())
         }
         Commands::Stop { name } => {
