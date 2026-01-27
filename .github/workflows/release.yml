@@ -82,7 +82,7 @@ jobs:
         run: |
           cd release
           if [ "$RUNNER_OS" = "Windows" ]; then
-            certutil -hashfile ${{ matrix.asset_name }} SHA256 | findstr /v "hash" > ${{ matrix.asset_name }}.sha256
+            certutil -hashfile ${{ matrix.asset_name }} SHA256 | findstr /v /c:"hash" > ${{ matrix.asset_name }}.sha256
           else
             shasum -a 256 ${{ matrix.asset_name }} > ${{ matrix.asset_name }}.sha256
           fi
