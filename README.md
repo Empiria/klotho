@@ -199,3 +199,189 @@ New to some of the technologies? Here's what you need to know:
 **Zellij vs tmux:** Zellij is a modern terminal multiplexer like tmux or screen. The key feature: your terminal sessions persist even when you disconnect. Close your laptop, SSH drops, terminal crashes? Your work is still there when you reconnect.
 
 **Agents:** AI coding assistants like Claude Code and OpenCode that help you write, debug, and understand code. Agent Session creates isolated container environments for these agents so they have consistent, reproducible workspaces every time.
+
+## Commands
+
+### start
+
+<details>
+<summary>Create a new session or attach to existing one</summary>
+
+**Syntax:**
+```
+agent-session start [-a AGENT] [-n NAME] [project-paths...]
+```
+
+**Options:**
+- `-a, --agent AGENT` - Agent to use (default: "claude")
+- `-n, --name NAME` - Session name (default: "default")
+- `-h, --help` - Show help message
+
+**Examples:**
+```bash
+agent-session start
+```
+Start a new session with the current directory.
+
+```bash
+agent-session start ~/projects/webapp
+```
+Start a new session with a specific project.
+
+```bash
+agent-session start -n frontend ~/projects/webapp
+```
+Start a named session called "frontend".
+
+```bash
+agent-session start -n fullstack ~/frontend ~/backend ~/shared-libs
+```
+Start a session with multiple repositories mounted.
+
+```bash
+agent-session start -a opencode ~/project
+```
+Start a session using the OpenCode agent.
+
+```bash
+agent-session start -n frontend
+```
+Reattach to an existing session named "frontend" (no path needed when session exists).
+
+**Notes:**
+- Sessions persist across terminal disconnects — press `Ctrl+C` or close your terminal to detach
+- If no `-a` flag provided, shows an interactive menu of available agents
+- Omit the session name to reattach to the "default" session
+- Environment variables `AGENT_SESSION_MOUNTS` and `AGENT_SESSION_KOB` available for advanced use cases (see `agent-session start --help`)
+
+</details>
+
+### stop
+
+<details>
+<summary>Stop a running session</summary>
+
+**Syntax:**
+```
+agent-session stop [SESSION_NAME]
+```
+
+**Arguments:**
+- `SESSION_NAME` - Name of session to stop (default: "default")
+
+**Options:**
+- `-h, --help` - Show help message
+
+**Examples:**
+```bash
+agent-session stop
+```
+Stop the "default" session.
+
+```bash
+agent-session stop frontend
+```
+Stop the session named "frontend".
+
+**Notes:**
+- Stopping an already-stopped session succeeds silently (idempotent)
+- Stopped sessions can be restarted with `agent-session restart`
+- Use `agent-session ls` to see session status
+
+</details>
+
+### restart
+
+<details>
+<summary>Restart a stopped session and reattach</summary>
+
+**Syntax:**
+```
+agent-session restart [SESSION_NAME]
+```
+
+**Arguments:**
+- `SESSION_NAME` - Name of session to restart (default: "default")
+
+**Options:**
+- `-h, --help` - Show help message
+
+**Examples:**
+```bash
+agent-session restart
+```
+Restart the "default" session.
+
+```bash
+agent-session restart frontend
+```
+Restart the session named "frontend".
+
+**Notes:**
+- If session is already running, simply reattaches (no restart needed)
+- Use `agent-session ls` to see session status
+
+</details>
+
+### ls
+
+<details>
+<summary>List all sessions with their status</summary>
+
+**Syntax:**
+```
+agent-session ls
+```
+
+**Options:**
+- `-h, --help` - Show help message
+
+**Output columns:**
+- `NAME` - Session name
+- `AGENT` - Agent type (claude, opencode, etc.)
+- `STATUS` - running (green) or stopped (red)
+
+**Example output:**
+```
+NAME                 AGENT        STATUS
+default              claude       running
+frontend             claude       stopped
+backend              opencode     running
+```
+
+</details>
+
+### rm
+
+<details>
+<summary>Remove a stopped session</summary>
+
+**Syntax:**
+```
+agent-session rm [-f|--force] [SESSION_NAME]
+```
+
+**Arguments:**
+- `SESSION_NAME` - Name of session to remove (default: "default")
+
+**Options:**
+- `-f, --force` - Skip confirmation prompt
+- `-h, --help` - Show help message
+
+**Examples:**
+```bash
+agent-session rm frontend
+```
+Remove the "frontend" session with confirmation prompt.
+
+```bash
+agent-session rm -f frontend
+```
+Remove the "frontend" session without confirmation.
+
+**Notes:**
+- Cannot remove a running session — stop it first with `agent-session stop`
+- Removal is permanent — container and its state are deleted
+- Use `agent-session ls` to see which sessions exist
+
+</details>
