@@ -20,7 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 6: Rename to Klotho** - Rebrand project and CLI from agent-session to klotho
 - [x] **Phase 7: Rust Rewrite** - Migrate bash script to Rust for better maintainability and single-binary distribution
 - [ ] **Phase 8: Docs Cleanup** - Documentation cleanup and updates
-- [ ] **Phase 9: Refactor KLOTHO_KOB** - Refactor KLOTHO_KOB environment variable handling
+- [x] **Phase 9: Refactor KLOTHO_KOB** - Refactor KLOTHO_KOB environment variable handling
 
 ## Phase Details
 
@@ -181,8 +181,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 09-01-PLAN.md — Add --linked-dir CLI flag and delete bash script
-- [ ] 09-02-PLAN.md — Fix mount logic, remove legacy variables, update documentation
+- [x] 09-01-PLAN.md — Add --linked-dir CLI flag and delete bash script
+- [x] 09-02-PLAN.md — Fix mount logic, remove legacy variables, update documentation
 
 **Details:**
 Rename KLOTHO_KOB to KLOTHO_LINKED_DIRS with self-explanatory naming. Fix the Rust implementation bug where directories were mounted at /home/agent/.klotho instead of at the same path as the host (which breaks symlinks). Add repeatable --linked-dir CLI flag for per-command override. Remove all legacy environment variable support (KLOTHO_KOB, AGENT_SESSION_*) for a clean break. Delete the deprecated bash script entirely since the Rust version is now canonical. Document the feature properly in README.
@@ -202,4 +202,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 | 6. Rename to Klotho | 3/3 | Complete | 2026-01-27 |
 | 7. Rust Rewrite | 8/8 | Complete | 2026-01-27 |
 | 8. Docs Cleanup | 0/0 | Not started | - |
-| 9. Refactor KLOTHO_KOB | 0/2 | Not started | - |
+| 9. Refactor KLOTHO_KOB | 2/2 | Complete | 2026-01-27 |
