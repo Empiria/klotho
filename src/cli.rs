@@ -25,6 +25,10 @@ pub enum Commands {
         #[arg(short, long, default_value = "default")]
         name: String,
 
+        /// Directories to mount at same path for symlink resolution (repeatable)
+        #[arg(long = "linked-dir")]
+        linked_dirs: Vec<String>,
+
         /// Project paths to mount
         paths: Vec<String>,
     },

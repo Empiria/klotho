@@ -15,7 +15,7 @@ fn main() -> Result<()> {
     };
 
     match cli.command {
-        Commands::Start { agent, name, paths } => {
+        Commands::Start { agent, name, paths, .. } => {
             commands::start::run(agent, name, paths, runtime_override)?;
             Ok(())
         }
