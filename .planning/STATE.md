@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** Consistent, reproducible agent environments that enable seamless handoff between people and agents through committed artifacts.
-**Current focus:** Phase 3 - Multi-Agent Support (Complete)
+**Current focus:** Phase 4 - Session Management (Complete)
 
 ## Current Position
 
-Phase: 3 of 5 (Multi-Agent Support)
-Plan: 3 of 3 in current phase
-Status: Phase complete (verified)
-Last activity: 2026-01-26 - Phase 3 verified complete
+Phase: 5 of 5 (Documentation)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-01-27 - Completed 05-01-PLAN.md
 
-Progress: [██████████] 100% (Phase 3 complete and verified)
+Progress: [█████████████████░░░] 91% (10 of 11 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
-- Average duration: 2.7 min
-- Total execution time: 0.50 hours
+- Total plans completed: 10
+- Average duration: 2.6 min
+- Total execution time: 0.52 hours
 
 **By Phase:**
 
@@ -30,10 +30,11 @@ Progress: [██████████] 100% (Phase 3 complete and verified)
 | 01-release-audit | 3 | 18min | 6min |
 | 02-agent-abstraction | 4 | 8min | 2min |
 | 03-multi-agent-support | 3 | 4min | 1.3min |
+| 04-session-management | 2 | 3min | 1.5min |
+| 05-documentation | 1 | 1.4min | 1.4min |
 
 **Recent Trend:**
-- Last 5 plans: 02-03 (1min), 02-04 (2min), 03-01 (1min), 03-02 (1min), 03-03 (2min)
-- Trend: Phase 3 complete with consistently fast velocity; multi-agent support delivered efficiently
+- Phase 5 started: README foundation with prerequisites and 5-minute quick start
 
 *Updated after each plan completion*
 
@@ -73,6 +74,8 @@ Recent decisions affecting current work:
 | 03-01 | Follow exact Claude pattern for OpenCode stage | Consistency over optimization for second agent proving abstraction |
 | 03-03 | Mount OpenCode config/auth following Claude pattern | Consistency across agents makes system predictable and maintainable |
 | 03-03 | Bundle MCP config as fallback via /tmp mount | First-time users need working MCP servers without manual config |
+| 05-01 | Concepts section placed after quick start | Avoid cognitive overload before first success; users anxious to see tool work first |
+| 05-01 | Quick start demonstrates agent selection | Show both -a flag and interactive menu, not just default Claude |
 
 ### Pending Todos
 
@@ -86,10 +89,14 @@ None yet.
 
 None yet.
 
+## Roadmap Evolution
+
+- Phase 6 added: Rename to Klotho (rebrand project and CLI from agent-session to klotho)
+
 ## Session Continuity
 
-Last session: 2026-01-26 17:54:00 UTC
-Stopped at: Completed 03-03-PLAN.md (OpenCode Runtime Integration) - Phase 3 complete
+Last session: 2026-01-27T14:10:53Z
+Stopped at: Completed 05-01-PLAN.md
 Resume file: None
 
-**Phase 3 Complete:** Multi-agent support fully implemented with Claude and OpenCode agents. Ready for Phase 4 (Release Preparation).
+**Phase 5 In Progress:** README foundation complete with prerequisites and 5-minute quick start. Next: Commands reference and troubleshooting.
