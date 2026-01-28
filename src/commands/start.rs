@@ -183,6 +183,7 @@ pub fn run(
         .arg("-d")
         .arg("--name")
         .arg(&container_name_new)
+        .arg("--label=klotho=true")
         .arg("--userns=keep-id")
         .arg("--workdir")
         .arg(&workdir)

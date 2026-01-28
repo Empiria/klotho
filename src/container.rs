@@ -191,9 +191,10 @@ pub fn get_image_name(runtime: Runtime, agent: &str) -> Result<String> {
 
 /// List containers with klotho naming pattern
 pub fn list_containers(runtime: Runtime) -> Result<Vec<(String, ContainerStatus)>> {
+    // Filter by klotho label to only show klotho-managed containers
     let output = runtime
         .command()
-        .args(["ps", "-a", "--format", "{{.Names}}|{{.Status}}"])
+        .args(["ps", "-a", "--filter", "label=klotho=true", "--format", "{{.Names}}|{{.Status}}"])
         .output()
         .context("failed to list containers")?;
 
@@ -210,16 +211,43 @@ pub fn list_containers(runtime: Runtime) -> Result<Vec<(String, ContainerStatus)
             continue;
         }
 
-        // Parse name|status
         if let Some((name, status_str)) = line.split_once('|') {
-            // Match both new naming (klotho-session-agent-name) and legacy (agent-name)
-            if name.starts_with("klotho-session-") || name.contains("-") {
-                let status = if status_str.to_lowercase().contains("up") {
-                    ContainerStatus::Running
-                } else {
-                    ContainerStatus::Stopped
-                };
-                containers.push((name.to_string(), status));
+            let status = if status_str.to_lowercase().contains("up") {
+                ContainerStatus::Running
+            } else {
+                ContainerStatus::Stopped
+            };
+            containers.push((name.to_string(), status));
+        }
+    }
+
+    // Also check for pre-label containers by name prefix
+    let legacy_output = runtime
+        .command()
+        .args(["ps", "-a", "--format", "{{.Names}}|{{.Status}}"])
+        .output()
+        .context("failed to list containers")?;
+
+    if legacy_output.status.success() {
+        let legacy_stdout = String::from_utf8_lossy(&legacy_output.stdout);
+        let existing_names: std::collections::HashSet<String> =
+            containers.iter().map(|(n, _)| n.clone()).collect();
+
+        for line in legacy_stdout.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+
+            if let Some((name, status_str)) = line.split_once('|') {
+                if name.starts_with("klotho-") && !existing_names.contains(name as &str) {
+                    let status = if status_str.to_lowercase().contains("up") {
+                        ContainerStatus::Running
+                    } else {
+                        ContainerStatus::Stopped
+                    };
+                    containers.push((name.to_string(), status));
+                }
             }
         }
     }
