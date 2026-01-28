@@ -264,6 +264,33 @@ fn ensure_image_built(runtime: Runtime, agent: &str) -> Result<()> {
     Ok(())
 }
 
+/// Strip ANSI escape codes from a string
+fn strip_ansi_codes(s: &str) -> String {
+    // ANSI escape sequences follow pattern: ESC [ <params> m
+    // where ESC is \x1b, params are digits/semicolons
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '\x1b' {
+            // Check if this is start of ANSI sequence
+            if chars.peek() == Some(&'[') {
+                chars.next(); // consume '['
+                // Skip until we hit 'm' (or end of string)
+                while let Some(ch) = chars.next() {
+                    if ch == 'm' {
+                        break;
+                    }
+                }
+                continue;
+            }
+        }
+        result.push(ch);
+    }
+
+    result
+}
+
 /// Attach to zellij session in container
 fn attach_zellij(
     runtime: Runtime,
@@ -278,11 +305,8 @@ fn attach_zellij(
         .context("Failed to list zellij sessions")?;
 
     let stdout = String::from_utf8_lossy(&check.stdout);
-    // Strip ANSI codes for comparison
-    let clean_output: String = stdout
-        .chars()
-        .filter(|c| !c.is_control() || *c == '\n')
-        .collect();
+    // Strip ANSI codes for comparison (regex pattern: \x1b\[[0-9;]*m)
+    let clean_output = strip_ansi_codes(&stdout);
     let session_exists = clean_output
         .lines()
         .any(|line| line.trim().starts_with(session_name));
