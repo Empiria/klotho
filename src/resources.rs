@@ -105,3 +105,10 @@ pub fn should_use_embedded() -> bool {
     // If local config/ exists, prefer it (development mode)
     !Path::new("config").exists()
 }
+
+/// Get embedded Containerfile.hapi content
+pub fn get_hapi_containerfile() -> Result<String> {
+    let file = Resources::get("Containerfile.hapi")
+        .context("Containerfile.hapi not found in embedded resources")?;
+    Ok(String::from_utf8_lossy(&file.data).into_owned())
+}

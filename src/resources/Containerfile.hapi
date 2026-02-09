@@ -1,0 +1,19 @@
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Node.js LTS (required for hapi npm package)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install hapi globally
+RUN npm install -g @twsxtd/hapi
+
+# Hapi config directory
+VOLUME /root/.hapi
+
+# Default: start hub with relay for E2E encrypted remote access
+CMD ["hapi", "hub", "--relay"]

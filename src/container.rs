@@ -1,6 +1,9 @@
 use anyhow::{Context, Result};
 use std::process::Command;
 
+/// Klotho network name for container communication
+pub const KLOTHO_NETWORK: &str = "klotho";
+
 /// Container runtime (podman or docker)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Runtime {
@@ -325,6 +328,96 @@ pub fn remove_container(runtime: Runtime, container_name: &str) -> Result<()> {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         anyhow::bail!("failed to remove container: {}", stderr);
+    }
+
+    Ok(())
+}
+
+/// Ensure network exists, creating it if needed
+pub fn ensure_network(runtime: Runtime, network_name: &str) -> Result<()> {
+    // Check if network exists
+    let output = runtime
+        .command()
+        .args(["network", "exists", network_name])
+        .output()
+        .context("failed to check network existence")?;
+
+    if output.status.success() {
+        // Network already exists
+        return Ok(());
+    }
+
+    // Create network
+    let output = runtime
+        .command()
+        .args(["network", "create", network_name])
+        .output()
+        .context("failed to create network")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("failed to create network: {}", stderr);
+    }
+
+    Ok(())
+}
+
+/// Connect container to network
+pub fn connect_to_network(runtime: Runtime, container_name: &str, network_name: &str) -> Result<()> {
+    let output = runtime
+        .command()
+        .args(["network", "connect", network_name, container_name])
+        .output()
+        .context("failed to connect container to network")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        // Handle already-connected case gracefully
+        if stderr.to_lowercase().contains("already") {
+            return Ok(());
+        }
+
+        anyhow::bail!("failed to connect container to network: {}", stderr);
+    }
+
+    Ok(())
+}
+
+/// Get the hapi container name
+pub fn hapi_container_name() -> String {
+    "klotho-hapi".to_string()
+}
+
+/// Get the hapi volume name
+pub fn hapi_volume_name() -> String {
+    "klotho-hapi-config".to_string()
+}
+
+/// Ensure volume exists, creating it if needed
+pub fn ensure_volume(runtime: Runtime, volume_name: &str) -> Result<()> {
+    // Check if volume exists
+    let output = runtime
+        .command()
+        .args(["volume", "exists", volume_name])
+        .output()
+        .context("failed to check volume existence")?;
+
+    if output.status.success() {
+        // Volume already exists
+        return Ok(());
+    }
+
+    // Create volume
+    let output = runtime
+        .command()
+        .args(["volume", "create", volume_name])
+        .output()
+        .context("failed to create volume")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("failed to create volume: {}", stderr);
     }
 
     Ok(())
