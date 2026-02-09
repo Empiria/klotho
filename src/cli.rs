@@ -80,4 +80,22 @@ pub enum Commands {
         /// Agent name(s) to rebuild
         agents: Vec<String>,
     },
+
+    /// Manage mobile access via hapi
+    Mobile {
+        #[command(subcommand)]
+        command: MobileCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum MobileCommands {
+    /// Start the hapi mobile hub sidecar
+    Start,
+    /// Stop the hapi mobile hub sidecar
+    Stop,
+    /// Show mobile hub status, URL, QR code, and connected devices
+    Status,
+    /// Unpair a connected mobile device
+    Revoke,
 }

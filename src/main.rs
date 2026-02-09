@@ -43,5 +43,22 @@ fn main() -> Result<()> {
             commands::build::run(all, agents, true, runtime_override)?;
             Ok(())
         }
+        Commands::Mobile { command } => {
+            match command {
+                klotho::cli::MobileCommands::Start => {
+                    commands::mobile::start::run(runtime_override)?;
+                }
+                klotho::cli::MobileCommands::Stop => {
+                    commands::mobile::stop::run(runtime_override)?;
+                }
+                klotho::cli::MobileCommands::Status => {
+                    commands::mobile::status::run(runtime_override)?;
+                }
+                klotho::cli::MobileCommands::Revoke => {
+                    commands::mobile::revoke::run(runtime_override)?;
+                }
+            }
+            Ok(())
+        }
     }
 }
