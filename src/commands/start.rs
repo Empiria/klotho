@@ -9,7 +9,7 @@ use crate::agent::{self, AgentConfig};
 use crate::commands::build;
 use crate::config::load_agent_config;
 use crate::container::{
-    self, container_status, connect_to_network, detect_runtime, ensure_network, find_container,
+    container_status, detect_runtime, ensure_network, find_container,
     get_image_name, hapi_container_name, image_exists, start_container, ContainerStatus,
     Runtime, KLOTHO_NETWORK,
 };
@@ -55,13 +55,6 @@ pub fn run(
                 println!("Starting stopped session '{}'...", name);
                 start_container(runtime, &container_name)?;
 
-                // Try connecting to mobile hub network (best-effort)
-                let hapi_name = hapi_container_name();
-                if let Ok(ContainerStatus::Running) = container_status(runtime, &hapi_name) {
-                    let _ = ensure_network(runtime, KLOTHO_NETWORK);
-                    let _ = connect_to_network(runtime, &container_name, KLOTHO_NETWORK);
-                }
-
                 std::thread::sleep(std::time::Duration::from_secs(1));
                 return attach_zellij(runtime, &container_name, &name, &config);
             }
@@ -73,6 +66,11 @@ pub fn run(
 
     // Create new container
     println!("Creating new session '{}'...", name);
+
+    // Ensure klotho network exists so session containers can communicate with hapi
+    if let Err(e) = ensure_network(runtime, KLOTHO_NETWORK) {
+        eprintln!("warning: failed to ensure klotho network: {}", e);
+    }
 
     // Resolve paths (default to cwd if empty)
     let resolved_paths = if paths.is_empty() {
@@ -194,6 +192,7 @@ pub fn run(
         .arg(&container_name_new)
         .arg("--label=klotho=true")
         .arg("--userns=keep-id")
+        .args(["--network", KLOTHO_NETWORK])
         .arg("--workdir")
         .arg(&workdir)
         .args(&mount_args)
@@ -214,24 +213,13 @@ pub fn run(
         container_name_new.cyan()
     );
 
-    // If hapi mobile hub is running, connect this session to the klotho network
-    // so it's automatically visible on mobile
+    // Session is on klotho network from creation, report if hapi is reachable
     let hapi_name = hapi_container_name();
     if let Ok(ContainerStatus::Running) = container_status(runtime, &hapi_name) {
-        // Ensure network exists (idempotent)
-        if let Err(e) = ensure_network(runtime, KLOTHO_NETWORK) {
-            eprintln!("warning: failed to ensure klotho network: {}", e);
-        } else {
-            // Connect the new session container to the network
-            if let Err(e) = connect_to_network(runtime, &container_name_new, KLOTHO_NETWORK) {
-                eprintln!("warning: failed to connect session to mobile hub: {}", e);
-            } else {
-                println!(
-                    "  {} Connected to mobile hub",
-                    "↔".cyan()
-                );
-            }
-        }
+        println!(
+            "  {} Connected to mobile hub",
+            "↔".cyan()
+        );
     }
 
     // Give container a moment to start
