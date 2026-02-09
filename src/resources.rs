@@ -112,3 +112,24 @@ pub fn get_hapi_containerfile() -> Result<String> {
         .context("Containerfile.hapi not found in embedded resources")?;
     Ok(String::from_utf8_lossy(&file.data).into_owned())
 }
+
+/// Extract hapi build context to a temporary directory for building
+/// Returns the path to the temp directory
+pub fn extract_hapi_build_context() -> Result<PathBuf> {
+    let temp_dir = std::env::temp_dir().join("klotho-hapi-build");
+
+    // Clean and recreate
+    if temp_dir.exists() {
+        std::fs::remove_dir_all(&temp_dir)
+            .context("Failed to clean hapi temp directory")?;
+    }
+    std::fs::create_dir_all(&temp_dir)
+        .context("Failed to create hapi temp directory")?;
+
+    // Write Containerfile.hapi
+    let containerfile = get_hapi_containerfile()?;
+    std::fs::write(temp_dir.join("Containerfile.hapi"), containerfile)
+        .context("Failed to write Containerfile.hapi")?;
+
+    Ok(temp_dir)
+}
