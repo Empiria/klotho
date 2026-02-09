@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use crate::container::{
     container_status, detect_runtime, ensure_network, ensure_volume,
-    hapi_container_name, hapi_volume_name, start_container, ContainerStatus, Runtime,
+    hapi_container_name, hapi_volume_name, start_container, ContainerStatus,
     KLOTHO_NETWORK,
 };
 use crate::resources;

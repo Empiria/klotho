@@ -54,11 +54,11 @@ pub fn run(runtime_override: Option<&str>) -> Result<()> {
     } else {
         for (session_name, session_status) in connected_sessions {
             let status_text = match session_status {
-                ContainerStatus::Running => "running".green(),
-                ContainerStatus::Stopped => "stopped".yellow(),
-                ContainerStatus::NotFound => "unknown".dimmed(),
+                ContainerStatus::Running => format!("{}", "running".green()),
+                ContainerStatus::Stopped => format!("{}", "stopped".yellow()),
+                ContainerStatus::NotFound => format!("{}", "unknown".dimmed()),
             };
-            println!("  {} {}", "•".cyan(), format!("{} ({})", session_name, status_text));
+            println!("  {} {} ({})", "•".cyan(), session_name, status_text);
         }
     }
 
