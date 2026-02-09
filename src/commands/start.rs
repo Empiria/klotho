@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use crate::agent::{self, AgentConfig};
-use crate::commands::build;
+use crate::commands::{build, mobile};
 use crate::config::load_agent_config;
 use crate::container::{
     container_status, detect_runtime, ensure_network, find_container,
@@ -54,6 +54,16 @@ pub fn run(
             ContainerStatus::Stopped => {
                 println!("Starting stopped session '{}'...", name);
                 start_container(runtime, &container_name)?;
+
+                // Re-register with hapi if running (session may have been created before hapi)
+                let hapi_name = hapi_container_name();
+                if let Ok(ContainerStatus::Running) = container_status(runtime, &hapi_name) {
+                    if let Err(e) = mobile::register_session_with_hapi(
+                        runtime, &container_name, &name, "/workspace"
+                    ) {
+                        eprintln!("  {} Failed to register with mobile hub: {}", "⚠".yellow(), e);
+                    }
+                }
 
                 std::thread::sleep(std::time::Duration::from_secs(1));
                 return attach_zellij(runtime, &container_name, &name, &config);
@@ -213,13 +223,24 @@ pub fn run(
         container_name_new.cyan()
     );
 
-    // Session is on klotho network from creation, report if hapi is reachable
+    // Register session with hapi mobile hub if running
     let hapi_name = hapi_container_name();
     if let Ok(ContainerStatus::Running) = container_status(runtime, &hapi_name) {
-        println!(
-            "  {} Connected to mobile hub",
-            "↔".cyan()
-        );
+        match mobile::register_session_with_hapi(runtime, &container_name_new, &name, &workdir) {
+            Ok(()) => {
+                println!(
+                    "  {} Registered with mobile hub",
+                    "↔".cyan()
+                );
+            }
+            Err(e) => {
+                eprintln!(
+                    "  {} Failed to register with mobile hub: {}",
+                    "⚠".yellow(),
+                    e
+                );
+            }
+        }
     }
 
     // Give container a moment to start
