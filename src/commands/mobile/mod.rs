@@ -13,52 +13,12 @@ use crate::container::Runtime;
 /// Display connection info with QR code
 pub fn display_connection_info(runtime: Runtime, container_name: &str) -> Result<()> {
     // Check for override first
-    if let Some(url) = std::env::var("HAPI_PUBLIC_URL").ok() {
+    if let Ok(url) = std::env::var("HAPI_PUBLIC_URL") {
         display_url_with_qr(&url)?;
         return Ok(());
     }
 
-    // Strategy 1: Try to read settings.json from container
-    let settings_output = runtime
-        .command()
-        .args(["exec", container_name, "cat", "/root/.hapi/settings.json"])
-        .output();
-
-    if let Ok(output) = settings_output {
-        if output.status.success() {
-            let settings = String::from_utf8_lossy(&output.stdout);
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&settings) {
-                // Try various possible field names
-                if let Some(url) = json.get("url")
-                    .or_else(|| json.get("hubUrl"))
-                    .or_else(|| json.get("relay_url"))
-                    .or_else(|| json.get("relayUrl"))
-                    .and_then(|v| v.as_str())
-                {
-                    display_url_with_qr(url)?;
-                    return Ok(());
-                }
-            }
-        }
-    }
-
-    // Strategy 2: Try hapi CLI to get URL
-    let cli_output = runtime
-        .command()
-        .args(["exec", container_name, "hapi", "hub", "url"])
-        .output();
-
-    if let Ok(output) = cli_output {
-        if output.status.success() {
-            let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !url.is_empty() && (url.starts_with("http://") || url.starts_with("https://")) {
-                display_url_with_qr(&url)?;
-                return Ok(());
-            }
-        }
-    }
-
-    // Strategy 3: Parse container logs for URL
+    // Parse logs — hapi prints the app URL and relay URL during startup
     let logs_output = runtime
         .command()
         .args(["logs", container_name])
@@ -66,18 +26,55 @@ pub fn display_connection_info(runtime: Runtime, container_name: &str) -> Result
 
     if let Ok(output) = logs_output {
         let logs = String::from_utf8_lossy(&output.stdout);
-        // Look for URL patterns in logs
+
+        // Strategy 1: Find the app.hapi.run URL (the intended mobile pairing URL)
+        // Hapi prints: "  https://app.hapi.run/?hub=...&token=..."
         for line in logs.lines() {
-            if let Some(url_start) = line.find("http://").or_else(|| line.find("https://")) {
-                // Extract URL from the line
-                let url_part = &line[url_start..];
-                if let Some(url_end) = url_part.find(char::is_whitespace) {
-                    let url = &url_part[..url_end];
+            if let Some(start) = line.find("https://app.hapi.run/") {
+                let url = line[start..].trim();
+                display_url_with_qr(url)?;
+                return Ok(());
+            }
+        }
+
+        // Strategy 2: Find relay URL from "[Web] Public:" line and construct app URL
+        // Hapi prints: "[Web] Public: https://XXXX.relay.hapi.run"
+        let mut relay_url = None;
+        for line in logs.lines() {
+            if line.contains("[Web] Public:") {
+                if let Some(start) = line.find("https://") {
+                    relay_url = Some(line[start..].trim().to_string());
+                    break;
+                }
+            }
+        }
+
+        if let Some(relay) = relay_url {
+            // Try to get token from settings.json to construct full app URL
+            let token = get_cli_token(runtime, container_name);
+            if let Some(token) = token {
+                let encoded_relay = relay.replace("://", "%3A%2F%2F").replace("/", "%2F");
+                let app_url = format!(
+                    "https://app.hapi.run/?hub={}&token={}",
+                    encoded_relay, token
+                );
+                display_url_with_qr(&app_url)?;
+            } else {
+                display_url_with_qr(&relay)?;
+            }
+            return Ok(());
+        }
+
+        // Strategy 3: Find any non-localhost https URL in logs
+        for line in logs.lines() {
+            if let Some(start) = line.find("https://") {
+                let url_part = &line[start..];
+                let url = match url_part.find(char::is_whitespace) {
+                    Some(end) => &url_part[..end],
+                    None => url_part.trim(),
+                };
+                if !url.contains("localhost") {
                     display_url_with_qr(url)?;
-                    return Ok(());
-                } else {
-                    // URL goes to end of line
-                    display_url_with_qr(url_part.trim())?;
                     return Ok(());
                 }
             }
@@ -93,6 +90,22 @@ pub fn display_connection_info(runtime: Runtime, container_name: &str) -> Result
     println!();
 
     Ok(())
+}
+
+fn get_cli_token(runtime: Runtime, container_name: &str) -> Option<String> {
+    let output = runtime
+        .command()
+        .args(["exec", container_name, "cat", "/root/.hapi/settings.json"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let settings = String::from_utf8_lossy(&output.stdout);
+    let json: serde_json::Value = serde_json::from_str(&settings).ok()?;
+    json.get("cliApiToken")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
 }
 
 fn display_url_with_qr(url: &str) -> Result<()> {
