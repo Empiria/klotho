@@ -3,7 +3,7 @@ pub mod stop;
 pub mod status;
 pub mod revoke;
 
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use owo_colors::OwoColorize;
 use qrcode::QrCode;
 use qrcode::render::unicode;
@@ -92,7 +92,59 @@ pub fn display_connection_info(runtime: Runtime, container_name: &str) -> Result
     Ok(())
 }
 
-fn get_cli_token(runtime: Runtime, container_name: &str) -> Option<String> {
+/// Register a session with the hapi hub API so it appears on the mobile app.
+/// Best-effort: returns Ok(()) on success, Err on failure. Callers should
+/// treat failures as warnings, never blocking session creation.
+pub fn register_session_with_hapi(
+    runtime: Runtime,
+    _container_name: &str,
+    session_name: &str,
+    workspace_path: &str,
+) -> Result<()> {
+    let hapi_name = crate::container::hapi_container_name();
+
+    // Read the cliApiToken from hapi's settings.json
+    let token = get_cli_token(runtime, &hapi_name)
+        .context("hapi cliApiToken not available")?;
+
+    // Build metadata conforming to hapi's MetadataSchema (Zod validated):
+    //   - name: string (display name for session)
+    //   - path: string (used for project grouping — last segment becomes project name)
+    //   - host: string (required)
+    //   - startedBy: "runner" | "terminal" (must be one of these exact values)
+    let hostname = gethostname();
+    let body = serde_json::json!({
+        "metadata": {
+            "name": session_name,
+            "path": workspace_path,
+            "host": hostname,
+            "startedBy": "terminal"
+        }
+    });
+
+    let body_str = serde_json::to_string(&body)?;
+    let response = ureq::post("http://127.0.0.1:3006/cli/sessions")
+        .set("Authorization", &format!("Bearer {}", token))
+        .set("Content-Type", "application/json")
+        .send_string(&body_str)?;
+
+    if response.status() != 200 && response.status() != 201 {
+        bail!("hub API returned status {}", response.status());
+    }
+
+    Ok(())
+}
+
+fn gethostname() -> String {
+    std::process::Command::new("hostname")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+pub fn get_cli_token(runtime: Runtime, container_name: &str) -> Option<String> {
     let output = runtime
         .command()
         .args(["exec", container_name, "cat", "/root/.hapi/settings.json"])
