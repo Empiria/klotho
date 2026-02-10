@@ -18,6 +18,8 @@ pub struct AgentConfig {
     pub shell: String,
     /// Environment variables (space-separated KEY=value pairs)
     pub env_vars: String,
+    /// Optional command to launch the agent through hapi for mobile PTY bridging
+    pub hapi_cmd: Option<String>,
 }
 
 impl AgentConfig {
@@ -87,6 +89,7 @@ impl AgentConfig {
                 .context("missing AGENT_SHELL in config")?
                 .clone(),
             env_vars: map.get("AGENT_ENV_VARS").cloned().unwrap_or_default(),
+            hapi_cmd: map.get("AGENT_HAPI_CMD").cloned(),
         })
     }
 }
