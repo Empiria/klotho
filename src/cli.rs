@@ -67,6 +67,10 @@ pub enum Commands {
         #[arg(long)]
         all: bool,
 
+        /// Install additional packages (format: manager:package or manager:package=version)
+        #[arg(long = "install")]
+        install_packages: Vec<String>,
+
         /// Agent name(s) to build
         agents: Vec<String>,
     },
@@ -77,9 +81,16 @@ pub enum Commands {
         #[arg(long)]
         all: bool,
 
+        /// Install additional packages (format: manager:package or manager:package=version)
+        #[arg(long = "install")]
+        install_packages: Vec<String>,
+
         /// Agent name(s) to rebuild
         agents: Vec<String>,
     },
+
+    /// Initialize a .klotho.toml configuration file
+    Init,
 
     /// Manage mobile access via hapi
     Mobile {

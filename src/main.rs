@@ -35,12 +35,16 @@ fn main() -> Result<()> {
             commands::rm::run(name, force, runtime_override)?;
             Ok(())
         }
-        Commands::Build { all, agents } => {
-            commands::build::run(all, agents, false, runtime_override)?;
+        Commands::Build { all, install_packages, agents } => {
+            commands::build::run(all, agents, install_packages, false, runtime_override)?;
             Ok(())
         }
-        Commands::Rebuild { all, agents } => {
-            commands::build::run(all, agents, true, runtime_override)?;
+        Commands::Rebuild { all, install_packages, agents } => {
+            commands::build::run(all, agents, install_packages, true, runtime_override)?;
+            Ok(())
+        }
+        Commands::Init => {
+            commands::init::run()?;
             Ok(())
         }
         Commands::Mobile { command } => {
