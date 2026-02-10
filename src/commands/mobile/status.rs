@@ -69,10 +69,12 @@ pub fn run(runtime_override: Option<&str>) -> Result<()> {
 
 /// List containers connected to the klotho network
 fn list_connected_sessions(runtime: Runtime) -> Result<Vec<(String, ContainerStatus)>> {
-    // Inspect the klotho network to get list of connected containers
+    // Use `ps --filter network=` to find containers on the klotho network.
+    // podman network inspect's Go template format differs from Docker and
+    // doesn't expose a .Containers field, so we query running containers instead.
     let output = runtime
         .command()
-        .args(["network", "inspect", KLOTHO_NETWORK, "--format", "{{range .Containers}}{{.Name}} {{end}}"])
+        .args(["ps", "-a", "--filter", &format!("network={}", KLOTHO_NETWORK), "--format", "{{.Names}}"])
         .output();
 
     let mut sessions = Vec::new();
