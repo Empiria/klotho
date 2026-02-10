@@ -147,6 +147,117 @@ pub fn merge_cli_installs(packages: &mut Packages, cli_installs: &[String]) -> R
     Ok(())
 }
 
+/// Generate Containerfile RUN commands for installing packages
+/// Returns a vector of RUN command strings that can be inserted into a Containerfile
+pub fn generate_install_commands(packages: &Packages) -> Vec<String> {
+    let mut commands = Vec::new();
+    let mut packages = packages.clone();
+
+    // Check for known runtime recipes first and generate their installers
+    // Remove these keys from the maps so they're not also passed to standard installers
+
+    // Rust/rustup recipe
+    if packages.cargo.contains_key("rust") || packages.cargo.contains_key("rustup") {
+        commands.push(
+            "RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && . \"$HOME/.cargo/env\"".to_string()
+        );
+        packages.cargo.remove("rust");
+        packages.cargo.remove("rustup");
+    }
+
+    // Node/nvm recipe
+    if packages.npm.contains_key("node") || packages.npm.contains_key("nvm") {
+        commands.push(
+            "RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash && . \"$HOME/.nvm/nvm.sh\" && nvm install --lts".to_string()
+        );
+        packages.npm.remove("node");
+        packages.npm.remove("nvm");
+    }
+
+    // APT packages - install system deps first
+    if !packages.apt.is_empty() {
+        let mut pkg_list: Vec<String> = packages
+            .apt
+            .iter()
+            .map(|(name, version)| {
+                if version == "*" {
+                    name.clone()
+                } else {
+                    format!("{}={}*", name, version)
+                }
+            })
+            .collect();
+        pkg_list.sort(); // Alphabetical for deterministic output
+
+        commands.push(format!(
+            "RUN apt-get update && apt-get install -y --no-install-recommends {} && rm -rf /var/lib/apt/lists/*",
+            pkg_list.join(" \\\n    ")
+        ));
+    }
+
+    // PIP packages
+    if !packages.pip.is_empty() {
+        let pkg_specs: Vec<String> = packages
+            .pip
+            .iter()
+            .map(|(name, version)| {
+                if version == "*" {
+                    name.clone()
+                } else {
+                    format!("{}{}", name, version)
+                }
+            })
+            .collect();
+
+        commands.push(format!(
+            "RUN pip3 install --no-cache-dir {}",
+            pkg_specs.join(" ")
+        ));
+    }
+
+    // NPM packages (global)
+    if !packages.npm.is_empty() {
+        let pkg_specs: Vec<String> = packages
+            .npm
+            .iter()
+            .map(|(name, version)| {
+                if version == "*" {
+                    name.clone()
+                } else {
+                    format!("{}@{}", name, version)
+                }
+            })
+            .collect();
+
+        commands.push(format!(
+            "RUN npm install -g {}",
+            pkg_specs.join(" ")
+        ));
+    }
+
+    // Cargo packages - each gets its own RUN for better caching
+    for (name, version) in &packages.cargo {
+        if version == "*" {
+            commands.push(format!("RUN cargo install {}", name));
+        } else {
+            commands.push(format!("RUN cargo install {} --version {}", name, version));
+        }
+    }
+
+    commands
+}
+
+/// Generate a complete Containerfile snippet for custom packages
+/// Returns empty string if no packages
+pub fn generate_containerfile_snippet(packages: &Packages) -> String {
+    let commands = generate_install_commands(packages);
+    if commands.is_empty() {
+        String::new()
+    } else {
+        commands.join("\n")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -334,5 +445,159 @@ key = "value"
 
         packages.npm.insert("bad;package".to_string(), "*".to_string());
         assert!(validate_all_packages(&packages).is_err());
+    }
+
+    #[test]
+    fn test_generate_apt_commands() {
+        let mut packages = Packages::default();
+        packages.apt.insert("gcc".to_string(), "*".to_string());
+        packages.apt.insert("python3".to_string(), "3.11".to_string());
+
+        let commands = generate_install_commands(&packages);
+
+        assert_eq!(commands.len(), 1);
+        assert!(commands[0].contains("apt-get update"));
+        assert!(commands[0].contains("apt-get install"));
+        assert!(commands[0].contains("gcc"));
+        assert!(commands[0].contains("python3=3.11*"));
+        assert!(commands[0].contains("rm -rf /var/lib/apt/lists/*"));
+    }
+
+    #[test]
+    fn test_generate_pip_commands() {
+        let mut packages = Packages::default();
+        packages.pip.insert("pytest".to_string(), ">=7.0".to_string());
+        packages.pip.insert("requests".to_string(), "*".to_string());
+
+        let commands = generate_install_commands(&packages);
+
+        assert_eq!(commands.len(), 1);
+        assert!(commands[0].contains("pip3 install"));
+        assert!(commands[0].contains("--no-cache-dir"));
+        assert!(commands[0].contains("pytest>=7.0"));
+        assert!(commands[0].contains("requests"));
+    }
+
+    #[test]
+    fn test_generate_npm_commands() {
+        let mut packages = Packages::default();
+        packages.npm.insert("typescript".to_string(), "^5.0".to_string());
+        packages.npm.insert("@types/node".to_string(), "*".to_string());
+
+        let commands = generate_install_commands(&packages);
+
+        assert_eq!(commands.len(), 1);
+        assert!(commands[0].contains("npm install -g"));
+        assert!(commands[0].contains("typescript@^5.0"));
+        assert!(commands[0].contains("@types/node"));
+    }
+
+    #[test]
+    fn test_generate_cargo_commands() {
+        let mut packages = Packages::default();
+        packages.cargo.insert("ripgrep".to_string(), "*".to_string());
+        packages.cargo.insert("fd-find".to_string(), "8.7.0".to_string());
+
+        let commands = generate_install_commands(&packages);
+
+        assert_eq!(commands.len(), 2);
+
+        // HashMap iteration order is non-deterministic, so check both commands exist
+        let all_commands = commands.join(" ");
+        assert!(all_commands.contains("cargo install ripgrep"));
+        assert!(all_commands.contains("cargo install fd-find --version 8.7.0"));
+
+        // Verify one has --version and one doesn't
+        let has_version_count = commands.iter().filter(|c| c.contains("--version")).count();
+        assert_eq!(has_version_count, 1);
+    }
+
+    #[test]
+    fn test_generate_empty_packages() {
+        let packages = Packages::default();
+        let commands = generate_install_commands(&packages);
+        assert!(commands.is_empty());
+    }
+
+    #[test]
+    fn test_rustup_recipe() {
+        let mut packages = Packages::default();
+        packages.cargo.insert("rustup".to_string(), "*".to_string());
+        packages.cargo.insert("ripgrep".to_string(), "*".to_string());
+
+        let commands = generate_install_commands(&packages);
+
+        // Should have rustup installer + ripgrep
+        assert_eq!(commands.len(), 2);
+        assert!(commands[0].contains("https://sh.rustup.rs"));
+        assert!(commands[0].contains("sh -s -- -y"));
+        assert!(commands[1].contains("cargo install ripgrep"));
+    }
+
+    #[test]
+    fn test_nvm_recipe() {
+        let mut packages = Packages::default();
+        packages.npm.insert("nvm".to_string(), "*".to_string());
+        packages.npm.insert("typescript".to_string(), "*".to_string());
+
+        let commands = generate_install_commands(&packages);
+
+        // Should have nvm installer + typescript
+        assert_eq!(commands.len(), 2);
+        assert!(commands[0].contains("nvm-sh/nvm"));
+        assert!(commands[0].contains("nvm install --lts"));
+        assert!(commands[1].contains("npm install -g typescript"));
+    }
+
+    #[test]
+    fn test_recipe_removes_from_package_map() {
+        let mut packages = Packages::default();
+        packages.cargo.insert("rust".to_string(), "*".to_string());
+
+        let commands = generate_install_commands(&packages);
+
+        // Should only have rustup installer, not a "cargo install rust"
+        assert_eq!(commands.len(), 1);
+        assert!(commands[0].contains("rustup.rs"));
+        assert!(!commands[0].contains("cargo install"));
+    }
+
+    #[test]
+    fn test_mixed_package_managers() {
+        let mut packages = Packages::default();
+        packages.apt.insert("gcc".to_string(), "*".to_string());
+        packages.pip.insert("pytest".to_string(), "*".to_string());
+        packages.npm.insert("typescript".to_string(), "*".to_string());
+        packages.cargo.insert("ripgrep".to_string(), "*".to_string());
+
+        let commands = generate_install_commands(&packages);
+
+        // Should have all four: apt, pip, npm, cargo
+        assert_eq!(commands.len(), 4);
+        assert!(commands[0].contains("apt-get"));
+        assert!(commands[1].contains("pip3"));
+        assert!(commands[2].contains("npm"));
+        assert!(commands[3].contains("cargo"));
+    }
+
+    #[test]
+    fn test_containerfile_snippet_generation() {
+        let mut packages = Packages::default();
+        packages.apt.insert("gcc".to_string(), "*".to_string());
+        packages.pip.insert("pytest".to_string(), "*".to_string());
+
+        let snippet = generate_containerfile_snippet(&packages);
+
+        assert!(!snippet.is_empty());
+        assert!(snippet.contains("RUN apt-get"));
+        assert!(snippet.contains("RUN pip3"));
+        assert!(snippet.contains('\n')); // Multiple commands joined by newline
+    }
+
+    #[test]
+    fn test_containerfile_snippet_empty() {
+        let packages = Packages::default();
+        let snippet = generate_containerfile_snippet(&packages);
+        assert_eq!(snippet, "");
     }
 }
