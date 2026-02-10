@@ -239,6 +239,73 @@ Forces a fresh build, useful when upstream tools have updated.
 
 </details>
 
+### init
+
+<details>
+<summary>Scaffold a .klotho.toml configuration file</summary>
+
+```
+klotho init
+```
+
+Creates a `.klotho.toml` in the current directory with commented examples for all supported package managers (apt, pip, npm, cargo).
+
+**Example:**
+```bash
+cd ~/projects/my-app
+klotho init              # Creates .klotho.toml with template
+```
+
+Edit the generated file to add packages, then rebuild: `klotho build claude`.
+
+See [Project Configuration](#project-configuration-klothotoml) for format details.
+
+**Note:** Refuses to overwrite an existing `.klotho.toml`.
+
+</details>
+
+### mobile
+
+<details>
+<summary>Manage mobile access via hapi</summary>
+
+Control klotho sessions from your phone using [hapi](https://github.com/tiann/hapi/). A single hapi sidecar container provides a mobile hub for all your agent sessions.
+
+**Start the mobile hub:**
+```bash
+klotho mobile start
+```
+Displays a QR code and URL. Scan with your mobile device to connect.
+
+**Check status:**
+```bash
+klotho mobile status
+```
+Shows connection URL, QR code, connected devices, and active sessions.
+
+**Stop the mobile hub:**
+```bash
+klotho mobile stop
+```
+
+**Revoke a device:**
+```bash
+klotho mobile revoke
+```
+Unpairs a connected mobile device (interactive selection).
+
+**How it works:**
+- Hapi runs in a separate sidecar container on the `klotho` network
+- Uses built-in relay (WireGuard + TLS) for secure remote access
+- Connection persists across restarts — scan QR once, reconnect automatically
+- All sessions automatically register with the hub when it's running
+
+**Custom tunnel (optional):**
+
+Set `HAPI_PUBLIC_URL` environment variable to use your own tunnel (Cloudflare, Tailscale, etc.) instead of hapi's built-in relay.
+
+</details>
+
 ## Configuration
 
 ### Agent Configs
@@ -404,6 +471,38 @@ klotho rm SESSION_NAME
 1. Verify your agent works locally first (run `claude` or `opencode` outside klotho)
 2. Check that config files exist (`~/.claude.json` for Claude, `~/.config/opencode/` for OpenCode)
 3. Rebuild the image: `klotho rebuild claude` (or `klotho rebuild opencode`)
+
+### "klotho mobile start" shows no QR code
+
+The hapi container may not have started properly:
+```bash
+klotho mobile status     # Check hub state
+klotho mobile stop       # Stop and retry
+klotho mobile start
+```
+
+If the issue persists, check that the `klotho` network exists:
+```bash
+podman network ls | grep klotho
+```
+
+### Mobile device can't connect
+
+- Verify your device and machine are on the same network (or using hapi's relay)
+- Try `klotho mobile revoke` and re-scan the QR code
+- Set `HAPI_PUBLIC_URL` if behind a custom tunnel
+
+### Build fails with custom packages
+
+If `klotho build` fails after adding packages to `.klotho.toml`:
+
+1. Check package names are correct for the package manager (e.g., `build-essential` not `build_essential` for apt)
+2. Verify TOML syntax: `[packages.apt]` not `[packages.APT]`
+3. Try installing the package manually first: `sudo apt install <package>` to confirm it exists
+
+### "klotho init" says file already exists
+
+`.klotho.toml` already exists in the current directory. Edit it directly or remove it first if you want a fresh template.
 
 ## About
 
