@@ -2,7 +2,8 @@ use anyhow::Result;
 use owo_colors::OwoColorize;
 
 use crate::container::{
-    container_status, detect_runtime, hapi_container_name, stop_container, ContainerStatus,
+    container_status, detect_runtime, hapi_container_name, remove_container, stop_container,
+    ContainerStatus,
 };
 
 pub fn run(runtime_override: Option<&str>) -> Result<()> {
@@ -15,10 +16,12 @@ pub fn run(runtime_override: Option<&str>) -> Result<()> {
     match status {
         ContainerStatus::Running => {
             stop_container(runtime, &container_name)?;
+            remove_container(runtime, &container_name)?;
             println!("{} Stopped hapi mobile hub", "✓".green().bold());
         }
         ContainerStatus::Stopped => {
-            println!("Hapi mobile hub is already stopped");
+            remove_container(runtime, &container_name)?;
+            println!("{} Removed stale hapi container", "✓".green().bold());
         }
         ContainerStatus::NotFound => {
             println!("Hapi mobile hub is not running");

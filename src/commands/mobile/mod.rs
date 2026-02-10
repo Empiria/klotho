@@ -10,6 +10,8 @@ use qrcode::render::unicode;
 
 use crate::container::Runtime;
 
+const SUPPORTED_PROTOCOL_VERSION: u32 = 1;
+
 /// Display connection info with QR code
 pub fn display_connection_info(runtime: Runtime, container_name: &str) -> Result<()> {
     // Check for override first
@@ -107,13 +109,9 @@ pub fn register_session_with_hapi(
     let token = get_cli_token(runtime, &hapi_name)
         .context("hapi cliApiToken not available")?;
 
-    // Build metadata conforming to hapi's MetadataSchema (Zod validated):
-    //   - name: string (display name for session)
-    //   - path: string (used for project grouping — last segment becomes project name)
-    //   - host: string (required)
-    //   - startedBy: "runner" | "terminal" (must be one of these exact values)
     let hostname = gethostname();
     let body = serde_json::json!({
+        "tag": session_name,
         "metadata": {
             "name": session_name,
             "path": workspace_path,
@@ -123,15 +121,36 @@ pub fn register_session_with_hapi(
     });
 
     let body_str = serde_json::to_string(&body)?;
-    let response = ureq::post("http://127.0.0.1:3006/cli/sessions")
+    let result = ureq::post("http://127.0.0.1:3006/cli/sessions")
         .set("Authorization", &format!("Bearer {}", token))
         .set("Content-Type", "application/json")
-        .send_string(&body_str)?;
+        .send_string(&body_str);
 
-    if response.status() != 200 && response.status() != 201 {
-        bail!("hub API returned status {}", response.status());
+    match result {
+        Ok(response) => {
+            check_protocol_version(response.header("X-Hapi-Protocol-Version"))?;
+            Ok(())
+        }
+        Err(ureq::Error::Status(code, response)) => {
+            check_protocol_version(response.header("X-Hapi-Protocol-Version"))?;
+            bail!("hub API returned status {}", code);
+        }
+        Err(e) => Err(e.into()),
     }
+}
 
+fn check_protocol_version(header: Option<&str>) -> Result<()> {
+    if let Some(v) = header {
+        if let Ok(version) = v.parse::<u32>() {
+            if version > SUPPORTED_PROTOCOL_VERSION {
+                bail!(
+                    "hapi protocol version {} is newer than supported version {}; \
+                     rebuild the hapi image or update klotho",
+                    version, SUPPORTED_PROTOCOL_VERSION
+                );
+            }
+        }
+    }
     Ok(())
 }
 

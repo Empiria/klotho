@@ -100,6 +100,7 @@ pub fn run(runtime_override: Option<&str>) -> Result<()> {
         .args(["--label=klotho=true"])
         .args(["--network", KLOTHO_NETWORK])
         .args(["-p", "127.0.0.1:3006:3006"])
+        .args(["-e", "HAPI_LISTEN_HOST=0.0.0.0"])
         .args(["-v", &format!("{}:/root/.hapi", hapi_volume_name())]);
 
     // Add HAPI_PUBLIC_URL if set
