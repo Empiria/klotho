@@ -35,25 +35,81 @@ pub fn run(runtime_override: Option<&str>) -> Result<()> {
 }
 
 fn extract_session_info(container_name: &str) -> (String, String) {
-    // Try new naming: klotho-<agent>-<name>
-    // Example: klotho-opencode-infinite-worlds -> agent="opencode-infinite", name="worlds"
-    if let Some(rest) = container_name.strip_prefix("klotho-") {
-        // Find the last hyphen to split agent and name
-        if let Some(last_hyphen) = rest.rfind('-') {
-            let agent = &rest[..last_hyphen];
-            let name = &rest[last_hyphen + 1..];
+    // New naming: klotho-session-{agent}-{name}
+    if let Some(rest) = container_name.strip_prefix("klotho-session-") {
+        if let Some(pos) = rest.find('-') {
+            let agent = &rest[..pos];
+            let name = &rest[pos + 1..];
             return (name.to_string(), agent.to_string());
         }
+        return (rest.to_string(), rest.to_string());
     }
 
-    // Try legacy naming: <agent>-<name>
-    // Example: agent-default -> agent="agent", name="default"
-    if let Some(last_hyphen) = container_name.rfind('-') {
-        let agent = &container_name[..last_hyphen];
-        let name = &container_name[last_hyphen + 1..];
+    // Non-session klotho containers (e.g. klotho-hapi sidecar)
+    if let Some(rest) = container_name.strip_prefix("klotho-") {
+        return (rest.to_string(), rest.to_string());
+    }
+
+    // Legacy naming: {agent}-{name}
+    if let Some(pos) = container_name.find('-') {
+        let agent = &container_name[..pos];
+        let name = &container_name[pos + 1..];
         return (name.to_string(), agent.to_string());
     }
 
-    // Fallback: couldn't parse
     (container_name.to_string(), "unknown".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_naming_simple() {
+        let (name, agent) = extract_session_info("klotho-session-claude-default");
+        assert_eq!(agent, "claude");
+        assert_eq!(name, "default");
+    }
+
+    #[test]
+    fn test_new_naming_hyphenated_session_name() {
+        let (name, agent) = extract_session_info("klotho-session-opencode-my-project");
+        assert_eq!(agent, "opencode");
+        assert_eq!(name, "my-project");
+    }
+
+    #[test]
+    fn test_new_naming_no_session_name() {
+        let (name, agent) = extract_session_info("klotho-session-claude");
+        assert_eq!(agent, "claude");
+        assert_eq!(name, "claude");
+    }
+
+    #[test]
+    fn test_hapi_sidecar() {
+        let (name, agent) = extract_session_info("klotho-hapi");
+        assert_eq!(agent, "hapi");
+        assert_eq!(name, "hapi");
+    }
+
+    #[test]
+    fn test_legacy_naming() {
+        let (name, agent) = extract_session_info("claude-default");
+        assert_eq!(agent, "claude");
+        assert_eq!(name, "default");
+    }
+
+    #[test]
+    fn test_legacy_naming_hyphenated() {
+        let (name, agent) = extract_session_info("opencode-infinite-worlds");
+        assert_eq!(agent, "opencode");
+        assert_eq!(name, "infinite-worlds");
+    }
+
+    #[test]
+    fn test_no_hyphen_fallback() {
+        let (name, agent) = extract_session_info("standalone");
+        assert_eq!(name, "standalone");
+        assert_eq!(agent, "unknown");
+    }
 }
