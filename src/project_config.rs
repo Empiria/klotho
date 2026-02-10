@@ -1,0 +1,338 @@
+use anyhow::{Context, Result, bail};
+use regex_lite::Regex;
+use serde::Deserialize;
+use std::collections::HashMap;
+use std::path::Path;
+
+#[derive(Deserialize, Default, Debug, Clone)]
+pub struct KlothoConfig {
+    #[serde(default)]
+    pub packages: Option<Packages>,
+}
+
+#[derive(Deserialize, Default, Debug, Clone)]
+pub struct Packages {
+    #[serde(default)]
+    pub apt: HashMap<String, String>,
+    #[serde(default)]
+    pub pip: HashMap<String, String>,
+    #[serde(default)]
+    pub npm: HashMap<String, String>,
+    #[serde(default)]
+    pub cargo: HashMap<String, String>,
+}
+
+impl Packages {
+    pub fn has_packages(&self) -> bool {
+        !self.apt.is_empty()
+            || !self.pip.is_empty()
+            || !self.npm.is_empty()
+            || !self.cargo.is_empty()
+    }
+}
+
+/// Load .klotho.toml from project directory. Returns empty config if file doesn't exist.
+pub fn load_project_config(project_path: &Path) -> Result<KlothoConfig> {
+    let config_path = project_path.join(".klotho.toml");
+
+    if !config_path.exists() {
+        // No config file is OK - return empty config
+        return Ok(KlothoConfig::default());
+    }
+
+    let contents = std::fs::read_to_string(&config_path)
+        .context(format!("Failed to read {}", config_path.display()))?;
+
+    toml::from_str(&contents)
+        .context(format!("Failed to parse {} as TOML", config_path.display()))
+}
+
+/// Validate package name against safe charset [a-zA-Z0-9._-+]
+pub fn validate_package_name(name: &str) -> Result<()> {
+    if name.is_empty() {
+        bail!("Package name cannot be empty");
+    }
+
+    let valid_chars = Regex::new(r"^[a-zA-Z0-9._\-+@/]+$").unwrap();
+    if !valid_chars.is_match(name) {
+        bail!(
+            "Invalid package name '{}': must contain only alphanumeric characters, dots, hyphens, underscores, plus signs, @, or /",
+            name
+        );
+    }
+
+    Ok(())
+}
+
+/// Validate all package names across all package managers
+pub fn validate_all_packages(packages: &Packages) -> Result<()> {
+    let mut errors = Vec::new();
+
+    for name in packages.apt.keys() {
+        if let Err(e) = validate_package_name(name) {
+            errors.push(e.to_string());
+        }
+    }
+
+    for name in packages.pip.keys() {
+        if let Err(e) = validate_package_name(name) {
+            errors.push(e.to_string());
+        }
+    }
+
+    for name in packages.npm.keys() {
+        if let Err(e) = validate_package_name(name) {
+            errors.push(e.to_string());
+        }
+    }
+
+    for name in packages.cargo.keys() {
+        if let Err(e) = validate_package_name(name) {
+            errors.push(e.to_string());
+        }
+    }
+
+    if !errors.is_empty() {
+        bail!("Package validation failed:\n  {}", errors.join("\n  "));
+    }
+
+    Ok(())
+}
+
+/// Merge CLI --install flags into packages. Format: "manager:package" or "manager:package=version"
+/// Note: version can include operators like ==, >=, ^, etc. - they're preserved and passed to package manager
+pub fn merge_cli_installs(packages: &mut Packages, cli_installs: &[String]) -> Result<()> {
+    for flag in cli_installs {
+        let (manager, rest) = flag
+            .split_once(':')
+            .context(format!("Invalid --install flag '{}': must be format 'manager:package' or 'manager:package=version'", flag))?;
+
+        // Parse package and version. Examples:
+        // "gcc" -> ("gcc", "*")
+        // "gcc=11" -> ("gcc", "11")
+        // "pytest==7.0" -> ("pytest", "==7.0")  (both = are version operator)
+        // "typescript=^5.0" -> ("typescript", "^5.0")  (first = is delimiter)
+        //
+        // Strategy: Split on first =. If the part after the = starts with another
+        // operator (=, <, >, etc.), include that first = in the version string.
+        let (package, version) = if let Some((pkg, after_eq)) = rest.split_once('=') {
+            // Check if what follows the = is itself an operator (making ==, >=, etc.)
+            if after_eq.starts_with('=') || after_eq.starts_with('<') || after_eq.starts_with('>') {
+                // This is a double operator like ==, =<, =>
+                // Include the first = in the version
+                (pkg, format!("={}", after_eq))
+            } else {
+                // Single = is just a delimiter
+                (pkg, after_eq.to_string())
+            }
+        } else {
+            (rest, "*".to_string())
+        };
+
+        let map = match manager {
+            "apt" => &mut packages.apt,
+            "pip" => &mut packages.pip,
+            "npm" => &mut packages.npm,
+            "cargo" => &mut packages.cargo,
+            _ => bail!(
+                "Unknown package manager '{}' in flag '{}'. Supported managers: apt, pip, npm, cargo",
+                manager,
+                flag
+            ),
+        };
+
+        map.entry(package.to_string()).or_insert(version);
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_valid_toml_all_sections() {
+        let toml_content = r#"
+[packages.apt]
+gcc = "*"
+python3 = "3.11"
+
+[packages.pip]
+pytest = ">=7.0"
+requests = "*"
+
+[packages.npm]
+typescript = "^5.0"
+
+[packages.cargo]
+ripgrep = "*"
+"#;
+
+        let config: KlothoConfig = toml::from_str(toml_content).unwrap();
+        let packages = config.packages.unwrap();
+
+        assert_eq!(packages.apt.get("gcc"), Some(&"*".to_string()));
+        assert_eq!(packages.apt.get("python3"), Some(&"3.11".to_string()));
+        assert_eq!(packages.pip.get("pytest"), Some(&">=7.0".to_string()));
+        assert_eq!(packages.npm.get("typescript"), Some(&"^5.0".to_string()));
+        assert_eq!(packages.cargo.get("ripgrep"), Some(&"*".to_string()));
+    }
+
+    #[test]
+    fn test_parse_partial_sections() {
+        let toml_content = r#"
+[packages.apt]
+gcc = "*"
+"#;
+
+        let config: KlothoConfig = toml::from_str(toml_content).unwrap();
+        let packages = config.packages.unwrap();
+
+        assert_eq!(packages.apt.len(), 1);
+        assert_eq!(packages.pip.len(), 0);
+        assert_eq!(packages.npm.len(), 0);
+        assert_eq!(packages.cargo.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_empty_toml() {
+        let toml_content = "";
+        let config: KlothoConfig = toml::from_str(toml_content).unwrap();
+        assert!(config.packages.is_none() || config.packages.unwrap().has_packages() == false);
+    }
+
+    #[test]
+    fn test_parse_no_packages_section() {
+        let toml_content = r#"
+[some_other_section]
+key = "value"
+"#;
+        let config: KlothoConfig = toml::from_str(toml_content).unwrap();
+        assert!(config.packages.is_none() || config.packages.unwrap().has_packages() == false);
+    }
+
+    #[test]
+    fn test_missing_file_returns_default() {
+        let result = load_project_config(Path::new("/nonexistent/path"));
+        assert!(result.is_ok());
+        let config = result.unwrap();
+        assert!(config.packages.is_none() || config.packages.unwrap().has_packages() == false);
+    }
+
+    #[test]
+    fn test_invalid_toml_returns_error() {
+        use std::io::Write;
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_invalid.klotho.toml");
+
+        std::fs::File::create(&test_file)
+            .unwrap()
+            .write_all(b"[packages.apt\ninvalid toml")
+            .unwrap();
+
+        let parent_dir = test_file.parent().unwrap();
+
+        // Create .klotho.toml in the parent directory
+        let config_file = parent_dir.join(".klotho.toml");
+        std::fs::write(&config_file, b"[packages.apt\ninvalid toml").unwrap();
+
+        let result = load_project_config(parent_dir);
+        assert!(result.is_err());
+
+        // Cleanup
+        std::fs::remove_file(config_file).ok();
+    }
+
+    #[test]
+    fn test_validate_valid_package_names() {
+        assert!(validate_package_name("gcc").is_ok());
+        assert!(validate_package_name("python3").is_ok());
+        assert!(validate_package_name("build-essential").is_ok());
+        assert!(validate_package_name("node.js").is_ok());
+        assert!(validate_package_name("libssl-dev").is_ok());
+        assert!(validate_package_name("g++").is_ok());
+        assert!(validate_package_name("@types/node").is_ok());
+        assert!(validate_package_name("@babel/core").is_ok());
+    }
+
+    #[test]
+    fn test_validate_invalid_package_names() {
+        assert!(validate_package_name("pack;age").is_err());
+        assert!(validate_package_name("pack|age").is_err());
+        assert!(validate_package_name("pack&&age").is_err());
+        assert!(validate_package_name("$(cmd)").is_err());
+        assert!(validate_package_name("`cmd`").is_err());
+        assert!(validate_package_name("pack age").is_err());
+        assert!(validate_package_name("").is_err());
+    }
+
+    #[test]
+    fn test_cli_flag_parsing() {
+        let mut packages = Packages::default();
+
+        merge_cli_installs(&mut packages, &[
+            "apt:gcc".to_string(),
+            "pip:pytest==7.0".to_string(),
+            "npm:typescript=^5.0".to_string(),
+            "cargo:ripgrep".to_string(),
+        ])
+        .unwrap();
+
+        assert_eq!(packages.apt.get("gcc"), Some(&"*".to_string()));
+        assert_eq!(packages.pip.get("pytest"), Some(&"==7.0".to_string()));
+        assert_eq!(packages.npm.get("typescript"), Some(&"^5.0".to_string()));
+        assert_eq!(packages.cargo.get("ripgrep"), Some(&"*".to_string()));
+    }
+
+    #[test]
+    fn test_cli_merge_is_additive() {
+        let mut packages = Packages::default();
+        packages.apt.insert("gcc".to_string(), "11".to_string());
+
+        merge_cli_installs(&mut packages, &["apt:python3".to_string()]).unwrap();
+
+        assert_eq!(packages.apt.get("gcc"), Some(&"11".to_string()));
+        assert_eq!(packages.apt.get("python3"), Some(&"*".to_string()));
+    }
+
+    #[test]
+    fn test_cli_merge_doesnt_replace_existing() {
+        let mut packages = Packages::default();
+        packages.apt.insert("gcc".to_string(), "11".to_string());
+
+        merge_cli_installs(&mut packages, &["apt:gcc=12".to_string()]).unwrap();
+
+        // Should keep original version since entry already exists
+        assert_eq!(packages.apt.get("gcc"), Some(&"11".to_string()));
+    }
+
+    #[test]
+    fn test_unknown_manager_returns_error() {
+        let mut packages = Packages::default();
+        let result = merge_cli_installs(&mut packages, &["unknown:package".to_string()]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Unknown package manager"));
+    }
+
+    #[test]
+    fn test_has_packages() {
+        let mut packages = Packages::default();
+        assert!(!packages.has_packages());
+
+        packages.apt.insert("gcc".to_string(), "*".to_string());
+        assert!(packages.has_packages());
+    }
+
+    #[test]
+    fn test_validate_all_packages() {
+        let mut packages = Packages::default();
+        packages.apt.insert("gcc".to_string(), "*".to_string());
+        packages.pip.insert("pytest".to_string(), "*".to_string());
+
+        assert!(validate_all_packages(&packages).is_ok());
+
+        packages.npm.insert("bad;package".to_string(), "*".to_string());
+        assert!(validate_all_packages(&packages).is_err());
+    }
+}
