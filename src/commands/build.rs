@@ -7,12 +7,14 @@ use std::process::Stdio;
 
 use crate::agent::{self, AgentConfig};
 use crate::container::{self, Runtime};
+use crate::project_config;
 use crate::resources;
 
 /// Build command entry point
 pub fn run(
     all: bool,
     agents: Vec<String>,
+    install_packages: Vec<String>,
     no_cache: bool,
     runtime_override: Option<&str>,
 ) -> Result<()> {
@@ -35,20 +37,27 @@ pub fn run(
 
     // Build each agent
     for agent in agents_to_build {
-        run_build(runtime, &agent, no_cache)?;
+        run_build(runtime, &agent, &install_packages, no_cache)?;
     }
 
     Ok(())
 }
 
 /// Internal build function (also used by start command for auto-build)
-pub fn run_build(runtime: Runtime, agent: &str, no_cache: bool) -> Result<()> {
+pub fn run_build(runtime: Runtime, agent: &str, install_packages: &[String], no_cache: bool) -> Result<()> {
     // Get build context (embedded or local)
     let build_context = if resources::should_use_embedded() {
         resources::extract_build_context()?
     } else {
         std::path::PathBuf::from(".")
     };
+
+    // Load project config and merge CLI install flags
+    let project_config = project_config::load_project_config(&std::env::current_dir()?)?;
+    let mut packages = project_config.packages.unwrap_or_default();
+    project_config::merge_cli_installs(&mut packages, install_packages)?;
+    project_config::validate_all_packages(&packages)?;
+    let custom_snippet = project_config::generate_containerfile_snippet(&packages);
 
     // Load agent config to get build args
     let config_content = if resources::should_use_embedded() {
@@ -63,7 +72,7 @@ pub fn run_build(runtime: Runtime, agent: &str, no_cache: bool) -> Result<()> {
 
     // Verify Containerfile has target stage
     let containerfile_path = build_context.join("Containerfile");
-    let containerfile = std::fs::read_to_string(&containerfile_path)
+    let mut containerfile = std::fs::read_to_string(&containerfile_path)
         .context("Failed to read Containerfile")?;
 
     let stages = find_stages(&containerfile);
@@ -73,6 +82,19 @@ pub fn run_build(runtime: Runtime, agent: &str, no_cache: bool) -> Result<()> {
             agent,
             stages.join(", ")
         );
+    }
+
+    // Inject custom packages stage if needed
+    if !custom_snippet.is_empty() {
+        containerfile = inject_custom_packages_stage(&containerfile, &custom_snippet)?;
+        std::fs::write(&containerfile_path, &containerfile)
+            .context("Failed to write modified Containerfile")?;
+    }
+
+    // Copy .klotho.toml to build context if it exists (for cache invalidation)
+    let klotho_toml = std::env::current_dir()?.join(".klotho.toml");
+    if klotho_toml.exists() {
+        std::fs::copy(&klotho_toml, build_context.join(".klotho.toml"))?;
     }
 
     // Prepare build command
@@ -246,6 +268,51 @@ fn extract_step_info(line: &str) -> Option<String> {
     }
 
     None
+}
+
+/// Inject custom packages stage between base and agent stages
+fn inject_custom_packages_stage(containerfile: &str, custom_snippet: &str) -> Result<String> {
+    let mut result = String::new();
+    let mut found_agent_stage = false;
+
+    for line in containerfile.lines() {
+        let line_lower = line.to_lowercase();
+
+        // Check if this is a "FROM base AS agent" line
+        if line_lower.starts_with("from") && line_lower.contains(" as ") {
+            // Extract stage name
+            if let Some(as_pos) = line_lower.find(" as ") {
+                let stage_name = line[as_pos + 4..].trim().split_whitespace().next().unwrap_or("");
+
+                // Check if this is an agent stage (not base)
+                if stage_name != "base" && !found_agent_stage {
+                    found_agent_stage = true;
+
+                    // Insert custom packages stage before this agent stage
+                    result.push_str("# ===== CUSTOM PACKAGES (from .klotho.toml) =====\n");
+                    result.push_str("FROM base AS custom-packages\n");
+                    result.push_str("USER root\n");
+                    result.push_str(custom_snippet);
+                    result.push_str("USER agent\n");
+                    result.push_str("\n");
+
+                    // Replace "FROM base AS" with "FROM custom-packages AS"
+                    let modified_line = line.replace("FROM base AS", "FROM custom-packages AS")
+                                           .replace("FROM base as", "FROM custom-packages AS")
+                                           .replace("from base AS", "FROM custom-packages AS")
+                                           .replace("from base as", "FROM custom-packages AS");
+                    result.push_str(&modified_line);
+                    result.push('\n');
+                    continue;
+                }
+            }
+        }
+
+        result.push_str(line);
+        result.push('\n');
+    }
+
+    Ok(result)
 }
 
 #[cfg(test)]

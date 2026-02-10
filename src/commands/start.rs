@@ -297,8 +297,8 @@ fn ensure_image_built(runtime: Runtime, agent: &str) -> Result<()> {
         bail!("Cannot start session without built image. Run: klotho build {}", agent);
     }
 
-    // Build the image
-    build::run_build(runtime, agent, false)?;
+    // Build the image (no custom packages from start command)
+    build::run_build(runtime, agent, &[], false)?;
 
     Ok(())
 }
