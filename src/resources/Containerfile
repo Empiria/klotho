@@ -11,6 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     npm \
     && rm -rf /var/lib/apt/lists/*
 
+# Install hapi for mobile PTY bridging
+RUN npm install -g @twsxtd/hapi
+
 # Install Zellij (stable, rarely changes)
 RUN curl -sSL https://github.com/zellij-org/zellij/releases/latest/download/zellij-x86_64-unknown-linux-musl.tar.gz \
     | tar xz -C /usr/local/bin
