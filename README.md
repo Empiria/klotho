@@ -287,6 +287,56 @@ AGENT_ENV_VARS="PATH=/home/agent/.local/bin:\$PATH SHELL=/usr/bin/fish"
 
 See `klotho start --help` for details.
 
+### Project Configuration (.klotho.toml)
+
+Specify additional packages to install into agent containers on a per-project basis. Klotho supports `apt`, `pip`, `npm`, and `cargo` package managers.
+
+**Location:** Place `.klotho.toml` in your project root (the directory you pass to `klotho start`). Run `klotho init` to scaffold one with commented examples.
+
+**Format:**
+
+```toml
+[packages.apt]
+package-name = "*"      # latest version
+
+[packages.pip]
+package-name = ">=1.0"  # version constraint
+
+[packages.npm]
+package-name = "^5.0"   # semver range
+
+[packages.cargo]
+package-name = "*"
+```
+
+**Example:**
+
+The Klotho repository itself uses this configuration for Rust development:
+
+```toml
+[packages.apt]
+build-essential = "*"
+pkg-config = "*"
+
+[packages.cargo]
+rustup = "*"
+```
+
+**Known recipes:**
+
+Certain package names trigger specialized installers:
+- `rustup` or `rust` in `[packages.cargo]` — Installs Rust via the rustup installer
+- `nvm` or `node` in `[packages.npm]` — Installs Node.js via nvm
+
+**Workflow:**
+
+1. `klotho init` — Scaffold `.klotho.toml` with commented examples
+2. Edit the file to add your project's required packages
+3. `klotho build claude` — Packages are installed during the build
+4. Packages are available in all sessions using that image
+
+**Note:** `klotho build --install apt:gcc` merges additively with `.klotho.toml` — useful for one-off packages without editing the config file.
+
 ## Development
 
 **Building from source:**
