@@ -120,6 +120,12 @@ pub fn run_build(runtime: Runtime, agent: &str, install_packages: &[String], no_
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
+    if let Some(ref hapi_cmd) = agent_config.hapi_cmd {
+        build_cmd
+            .arg("--build-arg")
+            .arg(format!("AGENT_HAPI_CMD={}", hapi_cmd));
+    }
+
     if no_cache {
         build_cmd.arg("--no-cache");
     }
