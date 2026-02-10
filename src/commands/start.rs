@@ -381,10 +381,25 @@ fn attach_zellij(
         )
     };
 
+    // Inject hapi env vars if hub is running (benefits sessions created before hub)
+    let hapi_name = hapi_container_name();
+    let mut hapi_env_args = Vec::new();
+    if let Ok(ContainerStatus::Running) = container_status(runtime, &hapi_name) {
+        if let Some(token) = mobile::get_cli_token(runtime, &hapi_name) {
+            hapi_env_args.extend_from_slice(&[
+                "-e".to_string(), format!("CLI_API_TOKEN={}", token),
+                "-e".to_string(), "HAPI_API_URL=http://klotho-hapi:3006".to_string(),
+            ]);
+        }
+    }
+
     // Run interactive exec
     let shell_env = format!("/home/agent/.local/bin/{}-session", config.name);
     let mut cmd = Command::new(runtime.as_str());
     cmd.args(["exec", "-it"]);
+    for arg in &hapi_env_args {
+        cmd.arg(arg);
+    }
     cmd.args(["-e", &format!("SHELL={}", shell_env)]);
     cmd.args(["-e", &format!("AGENT_LAUNCH_CMD={}", config.launch_cmd)]);
     cmd.args([container_name, "bash", "-c", &zellij_cmd]);
