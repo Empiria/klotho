@@ -193,6 +193,21 @@ pub fn run(
         "/workspace1".to_string()
     };
 
+    // Prepare hapi env vars if hub is running
+    let hapi_name = hapi_container_name();
+    let hapi_env_args = if let Ok(ContainerStatus::Running) = container_status(runtime, &hapi_name) {
+        if let Some(token) = mobile::get_cli_token(runtime, &hapi_name) {
+            vec![
+                "-e".to_string(), format!("CLI_API_TOKEN={}", token),
+                "-e".to_string(), "HAPI_API_URL=http://klotho-hapi:3006".to_string(),
+            ]
+        } else {
+            vec![]
+        }
+    } else {
+        vec![]
+    };
+
     // Run podman run with all mounts
     // Use keep-alive loop so container stays running for exec attachment
     let mut cmd = runtime.command();
@@ -206,6 +221,7 @@ pub fn run(
         .arg("--workdir")
         .arg(&workdir)
         .args(&mount_args)
+        .args(&hapi_env_args)
         .arg(&image_name)
         .args(["bash", "-c", "trap 'exit 0' TERM; while :; do sleep 1; done"]);
 
