@@ -92,7 +92,7 @@ klotho start [-a AGENT] [-n NAME] [project-paths...]
 ```
 
 **Options:**
-- `-a, --agent AGENT` — Agent to use (default: claude)
+- `-a, --agent AGENT` — Agent to use
 - `-n, --name NAME` — Session name (default: default)
 - `--linked-dir DIR` — Directory to mount at same path (repeatable, for symlinks)
 
@@ -204,14 +204,21 @@ klotho rm -f frontend    # Remove without confirmation
 <summary>Build agent container image</summary>
 
 ```
-klotho build [AGENT]
+klotho build [--all] [--install PKG...] [AGENT...]
 ```
+
+**Options:**
+- `--all` — Build all configured agents
+- `--install PKG` — Install additional package (repeatable, format: `manager:package`, e.g., `apt:gcc`, `pip:pytest`)
 
 **Examples:**
 ```bash
-klotho build claude      # Build Claude agent image
-klotho build opencode    # Build OpenCode agent image
+klotho build claude                                    # Build specific agent
+klotho build --all                                     # Build all agents
+klotho build --install apt:gcc --install pip:pytest claude  # Build with one-time packages
 ```
+
+**Note:** Packages from `--install` flags merge additively with `.klotho.toml` configuration. See [Project Configuration](#project-configuration-klothotoml) below.
 
 </details>
 
@@ -221,8 +228,12 @@ klotho build opencode    # Build OpenCode agent image
 <summary>Rebuild agent image without cache</summary>
 
 ```
-klotho rebuild [AGENT]
+klotho rebuild [--all] [--install PKG...] [AGENT...]
 ```
+
+**Options:**
+- `--all` — Rebuild all configured agents
+- `--install PKG` — Install additional package (repeatable, format: `manager:package`, e.g., `apt:gcc`, `pip:pytest`)
 
 Forces a fresh build, useful when upstream tools have updated.
 
