@@ -7,9 +7,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     ca-certificates \
     fish \
-    nodejs \
-    npm \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 22 (required by hapi; Debian bookworm ships Node 18 which is too old)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install hapi for mobile PTY bridging
+RUN npm install -g @twsxtd/hapi
 
 # Install Zellij (stable, rarely changes)
 RUN curl -sSL https://github.com/zellij-org/zellij/releases/latest/download/zellij-x86_64-unknown-linux-musl.tar.gz \
@@ -52,6 +58,7 @@ ARG AGENT_NAME
 ARG AGENT_INSTALL_CMD
 ARG AGENT_SHELL
 ARG AGENT_LAUNCH_CMD
+ARG AGENT_HAPI_CMD
 
 # Install uv (provides uvx for Python MCP servers)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -59,12 +66,24 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 # Install Claude Code using config value
 RUN eval "$AGENT_INSTALL_CMD"
 
-# Create agent wrapper script using AGENT_LAUNCH_CMD
-RUN printf '%s\n' \
-    '#!/usr/bin/env fish' \
-    "$AGENT_LAUNCH_CMD" \
-    'exec fish' \
-    > ~/.local/bin/${AGENT_NAME}-session && chmod +x ~/.local/bin/${AGENT_NAME}-session
+# Create agent wrapper script — conditional hapi wrapping when AGENT_HAPI_CMD is set
+RUN if [ -n "$AGENT_HAPI_CMD" ]; then \
+      printf '%s\n' \
+        '#!/usr/bin/env fish' \
+        'if set -q CLI_API_TOKEN' \
+        "    $AGENT_HAPI_CMD" \
+        'else' \
+        "    $AGENT_LAUNCH_CMD" \
+        'end' \
+        'exec fish' \
+        > ~/.local/bin/${AGENT_NAME}-session; \
+    else \
+      printf '%s\n' \
+        '#!/usr/bin/env fish' \
+        "$AGENT_LAUNCH_CMD" \
+        'exec fish' \
+        > ~/.local/bin/${AGENT_NAME}-session; \
+    fi && chmod +x ~/.local/bin/${AGENT_NAME}-session
 
 # Set environment from config
 ENV SHELL="$AGENT_SHELL"
@@ -77,6 +96,7 @@ ARG AGENT_NAME
 ARG AGENT_INSTALL_CMD
 ARG AGENT_SHELL
 ARG AGENT_LAUNCH_CMD
+ARG AGENT_HAPI_CMD
 
 # Install uv (provides uvx for Python MCP servers)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -84,12 +104,24 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 # Install OpenCode using config value
 RUN eval "$AGENT_INSTALL_CMD"
 
-# Create agent wrapper script using AGENT_LAUNCH_CMD
-RUN printf '%s\n' \
-    '#!/usr/bin/env fish' \
-    "$AGENT_LAUNCH_CMD" \
-    'exec fish' \
-    > ~/.local/bin/${AGENT_NAME}-session && chmod +x ~/.local/bin/${AGENT_NAME}-session
+# Create agent wrapper script — conditional hapi wrapping when AGENT_HAPI_CMD is set
+RUN if [ -n "$AGENT_HAPI_CMD" ]; then \
+      printf '%s\n' \
+        '#!/usr/bin/env fish' \
+        'if set -q CLI_API_TOKEN' \
+        "    $AGENT_HAPI_CMD" \
+        'else' \
+        "    $AGENT_LAUNCH_CMD" \
+        'end' \
+        'exec fish' \
+        > ~/.local/bin/${AGENT_NAME}-session; \
+    else \
+      printf '%s\n' \
+        '#!/usr/bin/env fish' \
+        "$AGENT_LAUNCH_CMD" \
+        'exec fish' \
+        > ~/.local/bin/${AGENT_NAME}-session; \
+    fi && chmod +x ~/.local/bin/${AGENT_NAME}-session
 
 # Set environment from config
 ENV SHELL="$AGENT_SHELL"
