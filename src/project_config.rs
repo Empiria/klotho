@@ -20,10 +20,73 @@ pub enum VolumeSpec {
     Simple(String),
 }
 
+impl VolumeSpec {
+    /// Resolve volume to (src, dest, readonly) tuple with tilde expansion
+    pub fn resolve(&self) -> (String, String, bool) {
+        match self {
+            VolumeSpec::Simple(path) => {
+                let expanded = expand_tilde(path);
+                (expanded.clone(), expanded, false)
+            }
+            VolumeSpec::Detailed { src, dest, readonly } => {
+                (expand_tilde(src), expand_tilde(dest), *readonly)
+            }
+        }
+    }
+}
+
+/// Expand ~ to $HOME in path
+fn expand_tilde(path: &str) -> String {
+    if path.starts_with("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            return path.replacen("~", &home, 1);
+        }
+    }
+    path.to_string()
+}
+
+/// MCP server configuration
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct McpServerConfig {
+    pub command: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub env: HashMap<String, String>,
+}
+
+/// MCP configuration with shared and agent-specific server sections
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
+pub struct McpConfig {
+    /// Shared servers (available to all agents)
+    #[serde(default)]
+    pub servers: HashMap<String, McpServerConfig>,
+    /// Claude-specific servers
+    #[serde(default)]
+    pub claude: HashMap<String, McpServerConfig>,
+    /// OpenCode-specific servers
+    #[serde(default)]
+    pub opencode: HashMap<String, McpServerConfig>,
+}
+
+/// Project metadata from [project] section
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct ProjectMeta {
+    pub agent: Option<String>,
+    pub name: Option<String>,
+    pub workdir: Option<String>,
+}
+
 #[derive(Deserialize, Default, Debug, Clone)]
 pub struct KlothoConfig {
     #[serde(default)]
     pub packages: Option<Packages>,
+    #[serde(default)]
+    pub project: Option<ProjectMeta>,
+    #[serde(default)]
+    pub volumes: Vec<VolumeSpec>,
+    #[serde(default)]
+    pub mcp: Option<McpConfig>,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -615,5 +678,208 @@ key = "value"
         let packages = Packages::default();
         let snippet = generate_containerfile_snippet(&packages);
         assert_eq!(snippet, "");
+    }
+
+    #[test]
+    fn test_parse_project_section() {
+        let toml_content = r#"
+[project]
+agent = "claude"
+name = "myproject"
+workdir = "/workspace"
+"#;
+        let config: KlothoConfig = toml::from_str(toml_content).unwrap();
+        let project = config.project.unwrap();
+        assert_eq!(project.agent, Some("claude".to_string()));
+        assert_eq!(project.name, Some("myproject".to_string()));
+        assert_eq!(project.workdir, Some("/workspace".to_string()));
+    }
+
+    #[test]
+    fn test_parse_volumes_simple() {
+        let toml_content = r#"
+volumes = [
+    "/home/user/libs",
+    "/var/data"
+]
+"#;
+        let config: KlothoConfig = toml::from_str(toml_content).unwrap();
+        assert_eq!(config.volumes.len(), 2);
+        assert_eq!(config.volumes[0], VolumeSpec::Simple("/home/user/libs".to_string()));
+        assert_eq!(config.volumes[1], VolumeSpec::Simple("/var/data".to_string()));
+    }
+
+    #[test]
+    fn test_parse_volumes_detailed() {
+        let toml_content = r#"
+[[volumes]]
+src = "/host/path"
+dest = "/container/path"
+readonly = true
+
+[[volumes]]
+src = "/host/other"
+dest = "/container/other"
+"#;
+        let config: KlothoConfig = toml::from_str(toml_content).unwrap();
+        assert_eq!(config.volumes.len(), 2);
+
+        match &config.volumes[0] {
+            VolumeSpec::Detailed { src, dest, readonly } => {
+                assert_eq!(src, "/host/path");
+                assert_eq!(dest, "/container/path");
+                assert!(readonly);
+            }
+            _ => panic!("Expected Detailed variant"),
+        }
+
+        match &config.volumes[1] {
+            VolumeSpec::Detailed { src, dest, readonly } => {
+                assert_eq!(src, "/host/other");
+                assert_eq!(dest, "/container/other");
+                assert!(!readonly);
+            }
+            _ => panic!("Expected Detailed variant"),
+        }
+    }
+
+    #[test]
+    fn test_parse_volumes_mixed() {
+        let toml_content = r#"
+volumes = [
+    "/simple/path",
+    { src = "/host/path", dest = "/container/path", readonly = true }
+]
+"#;
+        let config: KlothoConfig = toml::from_str(toml_content).unwrap();
+        assert_eq!(config.volumes.len(), 2);
+        assert_eq!(config.volumes[0], VolumeSpec::Simple("/simple/path".to_string()));
+
+        match &config.volumes[1] {
+            VolumeSpec::Detailed { src, dest, readonly } => {
+                assert_eq!(src, "/host/path");
+                assert_eq!(dest, "/container/path");
+                assert!(readonly);
+            }
+            _ => panic!("Expected Detailed variant"),
+        }
+    }
+
+    #[test]
+    fn test_parse_mcp_config() {
+        let toml_content = r#"
+[mcp.servers.context7]
+command = "uvx"
+args = ["@upstash/context7-mcp"]
+
+[mcp.claude.custom-tool]
+command = "/usr/bin/custom"
+args = ["--arg1", "--arg2"]
+env = { API_KEY = "test123" }
+
+[mcp.opencode.analyzer]
+command = "analyzer"
+"#;
+        let config: KlothoConfig = toml::from_str(toml_content).unwrap();
+        let mcp = config.mcp.unwrap();
+
+        // Check shared servers
+        assert_eq!(mcp.servers.len(), 1);
+        let context7 = mcp.servers.get("context7").unwrap();
+        assert_eq!(context7.command, "uvx");
+        assert_eq!(context7.args, vec!["@upstash/context7-mcp"]);
+
+        // Check claude-specific
+        assert_eq!(mcp.claude.len(), 1);
+        let custom = mcp.claude.get("custom-tool").unwrap();
+        assert_eq!(custom.command, "/usr/bin/custom");
+        assert_eq!(custom.args, vec!["--arg1", "--arg2"]);
+        assert_eq!(custom.env.get("API_KEY"), Some(&"test123".to_string()));
+
+        // Check opencode-specific
+        assert_eq!(mcp.opencode.len(), 1);
+        let analyzer = mcp.opencode.get("analyzer").unwrap();
+        assert_eq!(analyzer.command, "analyzer");
+    }
+
+    #[test]
+    fn test_volumespec_resolve_simple() {
+        let vol = VolumeSpec::Simple("/path/to/data".to_string());
+        let (src, dest, readonly) = vol.resolve();
+        assert_eq!(src, "/path/to/data");
+        assert_eq!(dest, "/path/to/data");
+        assert!(!readonly);
+    }
+
+    #[test]
+    fn test_volumespec_resolve_detailed() {
+        let vol = VolumeSpec::Detailed {
+            src: "/host/path".to_string(),
+            dest: "/container/path".to_string(),
+            readonly: true,
+        };
+        let (src, dest, readonly) = vol.resolve();
+        assert_eq!(src, "/host/path");
+        assert_eq!(dest, "/container/path");
+        assert!(readonly);
+    }
+
+    #[test]
+    fn test_volumespec_resolve_tilde_expansion() {
+        std::env::set_var("HOME", "/home/testuser");
+
+        let vol = VolumeSpec::Simple("~/mydata".to_string());
+        let (src, dest, _) = vol.resolve();
+        assert_eq!(src, "/home/testuser/mydata");
+        assert_eq!(dest, "/home/testuser/mydata");
+
+        let vol2 = VolumeSpec::Detailed {
+            src: "~/host/data".to_string(),
+            dest: "~/container/data".to_string(),
+            readonly: false,
+        };
+        let (src2, dest2, _) = vol2.resolve();
+        assert_eq!(src2, "/home/testuser/host/data");
+        assert_eq!(dest2, "/home/testuser/container/data");
+    }
+
+    #[test]
+    fn test_parse_complete_klotho_toml() {
+        let toml_content = r#"
+[project]
+agent = "claude"
+name = "test-project"
+
+[packages.apt]
+gcc = "*"
+
+[packages.pip]
+pytest = ">=7.0"
+
+[[volumes]]
+src = "~/data"
+dest = "/work/data"
+readonly = true
+
+[mcp.servers.shared]
+command = "shared-server"
+args = ["--port", "8080"]
+"#;
+        let config: KlothoConfig = toml::from_str(toml_content).unwrap();
+
+        // Verify all sections parsed correctly
+        assert!(config.project.is_some());
+        assert!(config.packages.is_some());
+        assert_eq!(config.volumes.len(), 1);
+        assert!(config.mcp.is_some());
+
+        let project = config.project.unwrap();
+        assert_eq!(project.agent, Some("claude".to_string()));
+
+        let packages = config.packages.unwrap();
+        assert_eq!(packages.apt.get("gcc"), Some(&"*".to_string()));
+
+        let mcp = config.mcp.unwrap();
+        assert!(mcp.servers.contains_key("shared"));
     }
 }
