@@ -50,13 +50,7 @@ fn extract_session_info(container_name: &str) -> (String, String) {
         return (rest.to_string(), rest.to_string());
     }
 
-    // Legacy naming: {agent}-{name}
-    if let Some(pos) = container_name.find('-') {
-        let agent = &container_name[..pos];
-        let name = &container_name[pos + 1..];
-        return (name.to_string(), agent.to_string());
-    }
-
+    // Unknown format
     (container_name.to_string(), "unknown".to_string())
 }
 
@@ -93,23 +87,9 @@ mod tests {
     }
 
     #[test]
-    fn test_legacy_naming() {
-        let (name, agent) = extract_session_info("claude-default");
-        assert_eq!(agent, "claude");
-        assert_eq!(name, "default");
-    }
-
-    #[test]
-    fn test_legacy_naming_hyphenated() {
-        let (name, agent) = extract_session_info("opencode-infinite-worlds");
-        assert_eq!(agent, "opencode");
-        assert_eq!(name, "infinite-worlds");
-    }
-
-    #[test]
-    fn test_no_hyphen_fallback() {
-        let (name, agent) = extract_session_info("standalone");
-        assert_eq!(name, "standalone");
+    fn test_unknown_format() {
+        let (name, agent) = extract_session_info("some-unknown-container");
+        assert_eq!(name, "some-unknown-container");
         assert_eq!(agent, "unknown");
     }
 }

@@ -23,35 +23,19 @@ fn get_xdg_config_home() -> PathBuf {
     }
 }
 
-/// Get config home with XDG fallback and klotho/agent-session layering
+/// Get config home with XDG fallback
 ///
-/// Priority:
-/// 1. ~/.config/klotho (preferred)
-/// 2. ~/.config/agent-session (legacy, shows deprecation warning)
-/// 3. Default to ~/.config/klotho
-pub fn get_config_home() -> (PathBuf, bool) {
+/// Returns ~/.config/klotho (or XDG_CONFIG_HOME/klotho if set)
+pub fn get_config_home() -> PathBuf {
     let config_base = get_xdg_config_home();
-    let klotho_config = config_base.join("klotho");
-    let legacy_config = config_base.join("agent-session");
-
-    if klotho_config.exists() {
-        return (klotho_config, false);
-    }
-
-    if legacy_config.exists() {
-        return (legacy_config, true);
-    }
-
-    // Default to klotho for new installations
-    (klotho_config, false)
+    config_base.join("klotho")
 }
 
 /// Load agent config with XDG-style layering
 ///
 /// Priority (highest to lowest):
 /// 1. User config in ~/.config/klotho/agents/<agent>/config.toml
-/// 2. User config in ~/.config/agent-session/agents/<agent>/config.toml (legacy)
-/// 3. Embedded default config (compiled into binary)
+/// 2. Embedded default config (compiled into binary)
 ///
 /// Returns the merged agent config
 pub fn load_agent_config(agent: &str) -> Result<AgentConfig> {
@@ -65,7 +49,7 @@ pub fn load_agent_config(agent: &str) -> Result<AgentConfig> {
         toml::from_str(&embedded_content).context("failed to parse embedded config")?;
 
     // Check for user config override
-    let (config_home, _is_legacy) = get_config_home();
+    let config_home = get_config_home();
     let user_config_path = config_home.join("agents").join(agent).join("config.toml");
 
     if user_config_path.exists() {
@@ -107,7 +91,7 @@ pub struct ResolvedConfig {
 
 /// Load global config from ~/.config/klotho/config.toml
 pub fn load_global_config() -> Result<GlobalConfig> {
-    let (config_home, _) = get_config_home();
+    let config_home = get_config_home();
     let config_path = config_home.join("config.toml");
 
     if !config_path.exists() {

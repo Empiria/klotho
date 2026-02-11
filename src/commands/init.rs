@@ -108,7 +108,7 @@ fn scaffold_project_config() -> Result<()> {
 
 /// Scaffold global config (~/.config/klotho/config.toml)
 fn scaffold_global_config() -> Result<()> {
-    let config_home = crate::config::get_config_home().0;
+    let config_home = crate::config::get_config_home();
     let config_path = config_home.join("config.toml");
 
     // Create directory if it doesn't exist

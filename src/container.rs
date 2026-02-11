@@ -142,19 +142,9 @@ pub fn container_status(runtime: Runtime, container_name: &str) -> Result<Contai
     Ok(ContainerStatus::NotFound)
 }
 
-/// Check if image exists (supports both new and legacy naming)
+/// Check if image exists
 pub fn image_exists(runtime: Runtime, agent: &str) -> Result<bool> {
-    // Check new naming first
-    if check_image_exists(runtime, &format!("klotho-{}:latest", agent))? {
-        return Ok(true);
-    }
-
-    // Check legacy naming
-    if check_image_exists(runtime, &format!("agent-session-{}:latest", agent))? {
-        return Ok(true);
-    }
-
-    Ok(false)
+    check_image_exists(runtime, &format!("klotho-{}:latest", agent))
 }
 
 /// Check if specific image exists
@@ -168,28 +158,9 @@ fn check_image_exists(runtime: Runtime, image_name: &str) -> Result<bool> {
     Ok(output.status.success())
 }
 
-/// Get image name (prefers new naming, falls back to legacy)
-pub fn get_image_name(runtime: Runtime, agent: &str) -> Result<String> {
-    let new_name = format!("klotho-{}:latest", agent);
-    if check_image_exists(runtime, &new_name)? {
-        return Ok(new_name);
-    }
-
-    let legacy_name = format!("agent-session-{}:latest", agent);
-    if check_image_exists(runtime, &legacy_name)? {
-        eprintln!(
-            "note: using legacy image {}",
-            legacy_name
-        );
-        eprintln!(
-            "      rebuild to use new naming: klotho build {}",
-            agent
-        );
-        return Ok(legacy_name);
-    }
-
-    // Default to new naming (for new builds)
-    Ok(new_name)
+/// Get image name
+pub fn get_image_name(_runtime: Runtime, agent: &str) -> Result<String> {
+    Ok(format!("klotho-{}:latest", agent))
 }
 
 /// List containers with klotho naming pattern
@@ -224,19 +195,19 @@ pub fn list_containers(runtime: Runtime) -> Result<Vec<(String, ContainerStatus)
         }
     }
 
-    // Also check for pre-label containers by name prefix
-    let legacy_output = runtime
+    // Also check for pre-label containers with klotho- prefix
+    let prelabel_output = runtime
         .command()
         .args(["ps", "-a", "--format", "{{.Names}}|{{.Status}}"])
         .output()
         .context("failed to list containers")?;
 
-    if legacy_output.status.success() {
-        let legacy_stdout = String::from_utf8_lossy(&legacy_output.stdout);
+    if prelabel_output.status.success() {
+        let prelabel_stdout = String::from_utf8_lossy(&prelabel_output.stdout);
         let existing_names: std::collections::HashSet<String> =
             containers.iter().map(|(n, _)| n.clone()).collect();
 
-        for line in legacy_stdout.lines() {
+        for line in prelabel_stdout.lines() {
             let line = line.trim();
             if line.is_empty() {
                 continue;
@@ -262,17 +233,10 @@ pub fn list_containers(runtime: Runtime) -> Result<Vec<(String, ContainerStatus)
 pub fn find_container(runtime: Runtime, session_name: &str) -> Result<Option<String>> {
     let containers = list_containers(runtime)?;
 
-    // Try new naming first: klotho-session-agent-name
-    let new_suffix = format!("-{}", session_name);
+    // Match klotho-session-agent-name pattern
+    let suffix = format!("-{}", session_name);
     for (name, _) in &containers {
-        if name.ends_with(&new_suffix) {
-            return Ok(Some(name.clone()));
-        }
-    }
-
-    // Try legacy naming: agent-name
-    for (name, _) in &containers {
-        if name.ends_with(session_name) {
+        if name.starts_with("klotho-session-") && name.ends_with(&suffix) {
             return Ok(Some(name.clone()));
         }
     }
