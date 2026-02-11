@@ -43,8 +43,8 @@ fn main() -> Result<()> {
             commands::build::run(all, agents, install_packages, true, runtime_override)?;
             Ok(())
         }
-        Commands::Init => {
-            commands::init::run()?;
+        Commands::Init { global } => {
+            commands::init::run(global)?;
             Ok(())
         }
         Commands::Mobile { command } => {

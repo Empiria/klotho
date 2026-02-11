@@ -86,7 +86,11 @@ pub enum Commands {
     },
 
     /// Initialize a .klotho.toml configuration file
-    Init,
+    Init {
+        /// Initialize global config (~/.config/klotho/config.toml) instead of project config
+        #[arg(long)]
+        global: bool,
+    },
 
     /// Manage mobile access via hapi
     Mobile {
