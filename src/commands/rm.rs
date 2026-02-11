@@ -1,8 +1,12 @@
 use anyhow::{bail, Result};
+use owo_colors::OwoColorize;
 use std::io::{self, Write};
+
 use crate::container::{
-    container_status, detect_runtime, find_container, remove_container, ContainerStatus,
+    container_status, detect_runtime, find_container, hapi_container_name, remove_container,
+    ContainerStatus,
 };
+use crate::commands::mobile;
 
 pub fn run(name: String, force: bool, runtime_override: Option<&str>) -> Result<()> {
     let runtime = detect_runtime(runtime_override)?;
@@ -35,6 +39,14 @@ pub fn run(name: String, force: bool, runtime_override: Option<&str>) -> Result<
         if answer != "y" && answer != "yes" {
             println!("Cancelled.");
             return Ok(());
+        }
+    }
+
+    // Deregister from hapi before removing (best-effort)
+    let hapi_name = hapi_container_name();
+    if let Ok(ContainerStatus::Running) = container_status(runtime, &hapi_name) {
+        if let Err(e) = mobile::deregister_session_from_hapi(runtime, &container_name) {
+            eprintln!("  {} Failed to deregister from mobile hub: {}", "⚠".yellow(), e);
         }
     }
 

@@ -10,8 +10,6 @@ use qrcode::render::unicode;
 
 use crate::container::Runtime;
 
-const SUPPORTED_PROTOCOL_VERSION: u32 = 1;
-
 /// Display connection info with QR code
 pub fn display_connection_info(runtime: Runtime, container_name: &str) -> Result<()> {
     // Check for override first
@@ -94,73 +92,97 @@ pub fn display_connection_info(runtime: Runtime, container_name: &str) -> Result
     Ok(())
 }
 
-/// Register a session with the hapi hub API so it appears on the mobile app.
-/// Best-effort: returns Ok(()) on success, Err on failure. Callers should
-/// treat failures as warnings, never blocking session creation.
-pub fn register_session_with_hapi(
-    runtime: Runtime,
-    _container_name: &str,
-    session_name: &str,
-    workspace_path: &str,
-) -> Result<()> {
+/// Deregister a session from hapi so it no longer appears on the mobile app.
+/// Uses the web API (JWT-authenticated) since it's the only path that updates
+/// hapi's in-memory state and propagates removal to connected clients.
+/// Best-effort: callers should treat failures as warnings.
+pub fn deregister_session_from_hapi(runtime: Runtime, container_name: &str) -> Result<()> {
     let hapi_name = crate::container::hapi_container_name();
 
-    // Read the cliApiToken from hapi's settings.json
     let token = get_cli_token(runtime, &hapi_name)
         .context("hapi cliApiToken not available")?;
 
-    let hostname = gethostname();
-    let body = serde_json::json!({
-        "tag": session_name,
-        "metadata": {
-            "name": session_name,
-            "path": workspace_path,
-            "host": hostname,
-            "startedBy": "terminal"
-        }
-    });
-
-    let body_str = serde_json::to_string(&body)?;
-    let result = ureq::post("http://127.0.0.1:3006/cli/sessions")
-        .set("Authorization", &format!("Bearer {}", token))
+    // Exchange CLI token for a JWT (required by the /api/ routes)
+    let auth_body = serde_json::json!({ "accessToken": token });
+    let auth_resp = ureq::post("http://127.0.0.1:3006/api/auth")
         .set("Content-Type", "application/json")
-        .send_string(&body_str);
+        .send_string(&serde_json::to_string(&auth_body)?)?;
+    let auth_json: serde_json::Value =
+        serde_json::from_reader(auth_resp.into_reader())?;
+    let jwt = auth_json["token"]
+        .as_str()
+        .context("no token in auth response")?
+        .to_string();
 
-    match result {
-        Ok(response) => {
-            check_protocol_version(response.header("X-Hapi-Protocol-Version"))?;
-            Ok(())
-        }
-        Err(ureq::Error::Status(code, response)) => {
-            check_protocol_version(response.header("X-Hapi-Protocol-Version"))?;
-            bail!("hub API returned status {}", code);
-        }
-        Err(e) => Err(e.into()),
-    }
-}
-
-fn check_protocol_version(header: Option<&str>) -> Result<()> {
-    if let Some(v) = header {
-        if let Ok(version) = v.parse::<u32>() {
-            if version > SUPPORTED_PROTOCOL_VERSION {
-                bail!(
-                    "hapi protocol version {} is newer than supported version {}; \
-                     rebuild the hapi image or update klotho",
-                    version, SUPPORTED_PROTOCOL_VERSION
-                );
-            }
-        }
-    }
-    Ok(())
-}
-
-fn gethostname() -> String {
-    std::process::Command::new("hostname")
+    // Get the session container's hostname — hapi stores this in metadata.host
+    let hostname_output = runtime
+        .command()
+        .args(["inspect", "--format", "{{.Config.Hostname}}", container_name])
         .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|| "unknown".to_string())
+        .context("failed to inspect session container")?;
+    if !hostname_output.status.success() {
+        bail!("failed to get container hostname");
+    }
+    let container_hostname = String::from_utf8_lossy(&hostname_output.stdout)
+        .trim()
+        .to_string();
+
+    // List session IDs, then fetch full details to match by host.
+    // The listing endpoint returns only partial metadata (no host field).
+    let listing_resp = ureq::get("http://127.0.0.1:3006/api/sessions")
+        .set("Authorization", &format!("Bearer {}", jwt))
+        .call()?;
+    let listing_json: serde_json::Value =
+        serde_json::from_reader(listing_resp.into_reader())?;
+
+    let sessions = listing_json["sessions"]
+        .as_array()
+        .context("unexpected sessions response")?;
+
+    for session in sessions {
+        let id = match session["id"].as_str() {
+            Some(id) => id,
+            None => continue,
+        };
+
+        // Fetch full session details (includes host in metadata)
+        let detail_resp = ureq::get(&format!("http://127.0.0.1:3006/api/sessions/{}", id))
+            .set("Authorization", &format!("Bearer {}", jwt))
+            .call();
+        let detail = match detail_resp {
+            Ok(r) => {
+                let json: serde_json::Value = serde_json::from_reader(r.into_reader())?;
+                json
+            }
+            Err(_) => continue,
+        };
+
+        let host = detail["session"]["metadata"]["host"]
+            .as_str()
+            .unwrap_or("");
+        if host != container_hostname {
+            continue;
+        }
+
+        // Archive first if active (DELETE rejects active sessions)
+        if detail["session"]["active"].as_bool().unwrap_or(false) {
+            let _ = ureq::post(&format!(
+                "http://127.0.0.1:3006/api/sessions/{}/archive",
+                id
+            ))
+            .set("Authorization", &format!("Bearer {}", jwt))
+            .call();
+        }
+
+        let _ = ureq::request(
+            "DELETE",
+            &format!("http://127.0.0.1:3006/api/sessions/{}", id),
+        )
+        .set("Authorization", &format!("Bearer {}", jwt))
+        .call();
+    }
+
+    Ok(())
 }
 
 pub fn get_cli_token(runtime: Runtime, container_name: &str) -> Option<String> {
