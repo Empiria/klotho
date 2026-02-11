@@ -1,0 +1,37 @@
+# OpenCode Agent Configuration
+# This file defines the agent identity, installation, and runtime requirements.
+
+# Agent identifier - must match directory name and Containerfile stage
+name = "opencode"
+
+# Human-readable description for menus and help text
+description = "OpenCode AI coding agent"
+
+# Command to install the agent in the container
+# Executed during image build as the agent user
+install_cmd = "curl -fsSL https://opencode.ai/install | bash"
+
+# Command to launch the agent
+# Executed when starting an interactive session
+launch_cmd = "exec opencode"
+
+# Default shell for the agent (full path)
+# Used as the user's login shell and SHELL environment variable
+shell = "/usr/bin/fish"
+
+# Environment variables (array of KEY=value strings)
+# Set in the container runtime environment
+env_vars = [
+    "PATH=/home/agent/.local/bin:$PATH",
+    "SHELL=/usr/bin/fish",
+    "OPENCODE_CONFIG_CONTENT={\"permission\":{\"*\":\"allow\"}}"
+]
+
+# Command to launch the agent through hapi for mobile PTY bridging
+# When CLI_API_TOKEN is set at runtime, the wrapper uses this instead of launch_cmd
+hapi_cmd = "hapi opencode"
+
+# Agent-specific optional mounts (checked at runtime, skipped if missing)
+[[optional_mounts]]
+src = "~/.config/opencode"
+dest = "/home/agent/.config/opencode"

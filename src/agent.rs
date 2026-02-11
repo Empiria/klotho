@@ -1,10 +1,11 @@
 use anyhow::{Context, Result};
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use crate::project_config::VolumeSpec;
 
-/// Agent configuration loaded from KEY=value config files
-#[derive(Debug, Clone)]
+/// Agent configuration loaded from TOML config files
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentConfig {
     /// Agent identifier - must match directory name
     pub name: String,
@@ -16,83 +17,16 @@ pub struct AgentConfig {
     pub launch_cmd: String,
     /// Default shell for the agent (full path)
     pub shell: String,
-    /// Environment variables (space-separated KEY=value pairs)
-    pub env_vars: String,
+    /// Environment variables (array of KEY=value strings)
+    pub env_vars: Vec<String>,
     /// Optional command to launch the agent through hapi for mobile PTY bridging
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub hapi_cmd: Option<String>,
+    /// Agent-specific optional mounts (checked at runtime, skipped if missing)
+    #[serde(default)]
+    pub optional_mounts: Vec<VolumeSpec>,
 }
 
-impl AgentConfig {
-    /// Parse agent config from KEY=value format
-    ///
-    /// Format: shell-sourceable KEY=value pairs with quoted values
-    /// Security: Rejects command substitution ($() or backticks)
-    pub fn from_keyvalue(content: &str) -> Result<HashMap<String, String>> {
-        let mut config = HashMap::new();
-
-        for line in content.lines() {
-            let line = line.trim();
-
-            // Skip empty lines and comments
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-
-            // Security check: reject command substitution
-            if line.contains("$(") || line.contains('`') {
-                anyhow::bail!(
-                    "config contains command substitution ($() or backticks)\n\
-                     config files may only contain KEY=value pairs and variable expansion ($VAR)"
-                );
-            }
-
-            // Parse KEY=value (value may be quoted)
-            if let Some((key, value)) = line.split_once('=') {
-                let key = key.trim();
-                let mut value = value.trim();
-
-                // Remove surrounding quotes if present
-                if (value.starts_with('"') && value.ends_with('"'))
-                    || (value.starts_with('\'') && value.ends_with('\''))
-                {
-                    value = &value[1..value.len() - 1];
-                }
-
-                config.insert(key.to_string(), value.to_string());
-            }
-        }
-
-        Ok(config)
-    }
-
-    /// Load agent config from parsed key-value map
-    pub fn from_map(map: &HashMap<String, String>) -> Result<Self> {
-        Ok(AgentConfig {
-            name: map
-                .get("AGENT_NAME")
-                .context("missing AGENT_NAME in config")?
-                .clone(),
-            description: map
-                .get("AGENT_DESCRIPTION")
-                .context("missing AGENT_DESCRIPTION in config")?
-                .clone(),
-            install_cmd: map
-                .get("AGENT_INSTALL_CMD")
-                .context("missing AGENT_INSTALL_CMD in config")?
-                .clone(),
-            launch_cmd: map
-                .get("AGENT_LAUNCH_CMD")
-                .context("missing AGENT_LAUNCH_CMD in config")?
-                .clone(),
-            shell: map
-                .get("AGENT_SHELL")
-                .context("missing AGENT_SHELL in config")?
-                .clone(),
-            env_vars: map.get("AGENT_ENV_VARS").cloned().unwrap_or_default(),
-            hapi_cmd: map.get("AGENT_HAPI_CMD").cloned(),
-        })
-    }
-}
 
 /// Discover available agents from config directory
 pub fn discover_agents(repo_dir: &PathBuf) -> Result<Vec<String>> {
@@ -130,59 +64,136 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_keyvalue_basic() {
+    fn test_parse_toml_basic() {
         let content = r#"
 # Comment
-AGENT_NAME="claude"
-AGENT_DESCRIPTION="Anthropic Claude Code agent"
-AGENT_SHELL="/usr/bin/fish"
+name = "claude"
+description = "Anthropic Claude Code agent"
+shell = "/usr/bin/fish"
+install_cmd = "curl -fsSL https://claude.ai/install.sh | bash"
+launch_cmd = "claude --dangerously-skip-permissions"
+env_vars = ["PATH=/home/agent/.local/bin:$PATH", "SHELL=/usr/bin/fish"]
+hapi_cmd = "hapi --dangerously-skip-permissions"
 "#;
-        let config = AgentConfig::from_keyvalue(content).unwrap();
-        assert_eq!(config.get("AGENT_NAME"), Some(&"claude".to_string()));
-        assert_eq!(
-            config.get("AGENT_DESCRIPTION"),
-            Some(&"Anthropic Claude Code agent".to_string())
-        );
-        assert_eq!(config.get("AGENT_SHELL"), Some(&"/usr/bin/fish".to_string()));
+        let config: AgentConfig = toml::from_str(content).unwrap();
+        assert_eq!(config.name, "claude");
+        assert_eq!(config.description, "Anthropic Claude Code agent");
+        assert_eq!(config.shell, "/usr/bin/fish");
+        assert_eq!(config.env_vars, vec![
+            "PATH=/home/agent/.local/bin:$PATH",
+            "SHELL=/usr/bin/fish"
+        ]);
+        assert_eq!(config.hapi_cmd, Some("hapi --dangerously-skip-permissions".to_string()));
     }
 
     #[test]
-    fn test_parse_keyvalue_rejects_command_substitution() {
+    fn test_parse_toml_with_optional_mounts() {
         let content = r#"
-AGENT_NAME="test"
-AGENT_SHELL="$(whoami)"
+name = "claude"
+description = "Anthropic Claude Code agent"
+shell = "/usr/bin/fish"
+install_cmd = "curl -fsSL https://claude.ai/install.sh | bash"
+launch_cmd = "claude --dangerously-skip-permissions"
+env_vars = ["PATH=/home/agent/.local/bin:$PATH"]
+hapi_cmd = "hapi --dangerously-skip-permissions"
+
+[[optional_mounts]]
+src = "~/.claude"
+dest = "/home/agent/.claude"
+
+[[optional_mounts]]
+src = "~/.config/claude"
+dest = "/home/agent/.config/claude"
+readonly = true
 "#;
-        let result = AgentConfig::from_keyvalue(content);
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("command substitution"));
+        let config: AgentConfig = toml::from_str(content).unwrap();
+        assert_eq!(config.name, "claude");
+        assert_eq!(config.optional_mounts.len(), 2);
+
+        // Check first mount (Detailed without readonly)
+        match &config.optional_mounts[0] {
+            VolumeSpec::Detailed { src, dest, readonly } => {
+                assert_eq!(src, "~/.claude");
+                assert_eq!(dest, "/home/agent/.claude");
+                assert_eq!(*readonly, false);
+            }
+            _ => panic!("Expected Detailed variant"),
+        }
+
+        // Check second mount (Detailed with readonly)
+        match &config.optional_mounts[1] {
+            VolumeSpec::Detailed { src, dest, readonly } => {
+                assert_eq!(src, "~/.config/claude");
+                assert_eq!(dest, "/home/agent/.config/claude");
+                assert_eq!(*readonly, true);
+            }
+            _ => panic!("Expected Detailed variant"),
+        }
     }
 
     #[test]
-    fn test_parse_keyvalue_rejects_backticks() {
+    fn test_optional_mounts_embedded() {
+        // Test that embedded agent configs with optional_mounts deserialize correctly
         let content = r#"
-AGENT_NAME="test"
-AGENT_SHELL="`whoami`"
+name = "test-agent"
+description = "Test agent"
+shell = "/bin/bash"
+install_cmd = "echo install"
+launch_cmd = "echo launch"
+env_vars = []
+
+[[optional_mounts]]
+src = "~/.test"
+dest = "/home/agent/.test"
 "#;
-        let result = AgentConfig::from_keyvalue(content);
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("command substitution"));
+        let config: AgentConfig = toml::from_str(content).unwrap();
+        assert_eq!(config.optional_mounts.len(), 1);
     }
 
     #[test]
-    fn test_parse_keyvalue_variable_expansion_allowed() {
+    fn test_optional_mounts_user_override() {
+        // Test that user override configs can add optional_mounts
         let content = r#"
-AGENT_ENV_VARS="PATH=/home/agent/.local/bin:$PATH SHELL=/usr/bin/fish"
+name = "test-agent"
+description = "Test agent with user overrides"
+shell = "/bin/bash"
+install_cmd = "echo install"
+launch_cmd = "echo launch"
+env_vars = ["CUSTOM=value"]
+
+[[optional_mounts]]
+src = "~/custom-mount"
+dest = "/home/agent/custom"
+readonly = true
 "#;
-        let config = AgentConfig::from_keyvalue(content).unwrap();
-        assert_eq!(
-            config.get("AGENT_ENV_VARS"),
-            Some(&"PATH=/home/agent/.local/bin:$PATH SHELL=/usr/bin/fish".to_string())
-        );
+        let config: AgentConfig = toml::from_str(content).unwrap();
+        assert_eq!(config.optional_mounts.len(), 1);
+        match &config.optional_mounts[0] {
+            VolumeSpec::Detailed { src, dest, readonly } => {
+                assert_eq!(src, "~/custom-mount");
+                assert_eq!(dest, "/home/agent/custom");
+                assert_eq!(*readonly, true);
+            }
+            _ => panic!("Expected Detailed variant"),
+        }
+    }
+
+    #[test]
+    fn test_parse_toml_env_vars_array() {
+        let content = r#"
+name = "opencode"
+description = "OpenCode agent"
+shell = "/usr/bin/fish"
+install_cmd = "curl install"
+launch_cmd = "opencode"
+env_vars = [
+    "PATH=/home/agent/.local/bin:$PATH",
+    "SHELL=/usr/bin/fish",
+    "OPENCODE_CONFIG_CONTENT={\"permission\":{\"*\":\"allow\"}}"
+]
+"#;
+        let config: AgentConfig = toml::from_str(content).unwrap();
+        assert_eq!(config.env_vars.len(), 3);
+        assert_eq!(config.env_vars[2], r#"OPENCODE_CONFIG_CONTENT={"permission":{"*":"allow"}}"#);
     }
 }

@@ -1,8 +1,24 @@
 use anyhow::{Context, Result, bail};
 use regex_lite::Regex;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
+
+/// Volume mount specification - shared by agent config, project config, and global config
+/// Supports both simple string format and detailed format with options
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(untagged)]
+pub enum VolumeSpec {
+    /// Detailed mount specification with source, destination, and optional readonly flag
+    Detailed {
+        src: String,
+        dest: String,
+        #[serde(default)]
+        readonly: bool
+    },
+    /// Simple mount specification as a single string (e.g., "/host/path:/container/path")
+    Simple(String),
+}
 
 #[derive(Deserialize, Default, Debug, Clone)]
 pub struct KlothoConfig {
