@@ -1,8 +1,8 @@
 # Klotho
 
-Run AI coding agents in isolated, reproducible containers with persistent terminal sessions.
+Run AI coding agents in isolated containers — then control them from your phone.
 
-Klotho creates containerized workspaces for AI agents like Claude Code and OpenCode, giving you consistent development environments that persist across terminal disconnects. Close your terminal, and the agent session keeps running — reattach anytime and pick up where you left off.
+Klotho creates containerized workspaces for AI agents like Claude Code and OpenCode, giving you reproducible environments that persist across terminal disconnects. Sessions keep running when you close your laptop, and you can reattach from any terminal — or pick up right where you left off from your phone via the built-in [mobile hub](#mobile-access).
 
 ## Quick Start
 
@@ -23,6 +23,11 @@ You're now in a containerized agent session with your project mounted at `/works
 Press `Ctrl+C` or close your terminal — the session keeps running. Reattach later:
 ```bash
 klotho start
+```
+
+**4. Go mobile (optional):**
+```bash
+klotho mobile start      # Scan the QR code with your phone
 ```
 
 ## Installation
