@@ -39,7 +39,7 @@ pub fn run(name: String, runtime_override: Option<&str>) -> Result<()> {
     let agent_type = extract_agent_from_container(&container_name, &name)?;
 
     // Load agent config
-    let (config, _is_legacy) = load_agent_config(&agent_type)?;
+    let config = load_agent_config(&agent_type)?;
 
     // Attach to zellij
     attach_zellij(runtime, &container_name, &name, &config)

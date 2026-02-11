@@ -5,7 +5,8 @@ use owo_colors::OwoColorize;
 use std::io::{BufRead, BufReader};
 use std::process::Stdio;
 
-use crate::agent::{self, AgentConfig};
+use crate::agent;
+use crate::config::load_agent_config;
 use crate::container::{self, Runtime};
 use crate::project_config;
 use crate::resources;
@@ -60,15 +61,7 @@ pub fn run_build(runtime: Runtime, agent: &str, install_packages: &[String], no_
     let custom_snippet = project_config::generate_containerfile_snippet(&packages);
 
     // Load agent config to get build args
-    let config_content = if resources::should_use_embedded() {
-        resources::get_agent_config(agent)?
-    } else {
-        std::fs::read_to_string(format!("config/agents/{}/config.conf", agent))
-            .context(format!("Agent config not found: {}", agent))?
-    };
-
-    let config_map = AgentConfig::from_keyvalue(&config_content)?;
-    let agent_config = AgentConfig::from_map(&config_map)?;
+    let agent_config = load_agent_config(agent)?;
 
     // Verify Containerfile has target stage
     let containerfile_path = build_context.join("Containerfile");
@@ -84,12 +77,19 @@ pub fn run_build(runtime: Runtime, agent: &str, install_packages: &[String], no_
         );
     }
 
-    // Inject custom packages stage if needed
-    if !custom_snippet.is_empty() {
+    // Inject custom packages stage if needed, writing to a temp file to avoid
+    // corrupting the source Containerfile.
+    let mut temp_containerfile: Option<std::path::PathBuf> = None;
+    let effective_containerfile = if !custom_snippet.is_empty() {
         containerfile = inject_custom_packages_stage(&containerfile, &custom_snippet)?;
-        std::fs::write(&containerfile_path, &containerfile)
-            .context("Failed to write modified Containerfile")?;
-    }
+        let tmp_path = build_context.join(".Containerfile.klotho-tmp");
+        std::fs::write(&tmp_path, &containerfile)
+            .context("Failed to write temporary Containerfile")?;
+        temp_containerfile = Some(tmp_path.clone());
+        tmp_path
+    } else {
+        containerfile_path
+    };
 
     // Copy .klotho.toml to build context if it exists (for cache invalidation)
     let klotho_toml = std::env::current_dir()?.join(".klotho.toml");
@@ -115,9 +115,9 @@ pub fn run_build(runtime: Runtime, agent: &str, install_packages: &[String], no_
         .arg("--build-arg")
         .arg(format!("AGENT_LAUNCH_CMD={}", agent_config.launch_cmd))
         .arg("-f")
-        .arg(containerfile_path)
+        .arg(&effective_containerfile)
         .arg(&build_context)
-        .stdout(Stdio::piped())
+        .stdout(Stdio::null())
         .stderr(Stdio::piped());
 
     if let Some(ref hapi_cmd) = agent_config.hapi_cmd {
@@ -161,6 +161,11 @@ pub fn run_build(runtime: Runtime, agent: &str, install_packages: &[String], no_
 
     // Wait for completion
     let status = child.wait().context("Failed to wait for build")?;
+
+    // Clean up temp Containerfile
+    if let Some(ref tmp) = temp_containerfile {
+        let _ = std::fs::remove_file(tmp);
+    }
 
     spinner.finish_and_clear();
 
@@ -299,6 +304,9 @@ fn inject_custom_packages_stage(containerfile: &str, custom_snippet: &str) -> Re
                     result.push_str("FROM base AS custom-packages\n");
                     result.push_str("USER root\n");
                     result.push_str(custom_snippet);
+                    if !custom_snippet.ends_with('\n') {
+                        result.push('\n');
+                    }
                     result.push_str("USER agent\n");
                     result.push_str("\n");
 

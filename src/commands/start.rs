@@ -32,7 +32,7 @@ pub fn run(
     };
 
     // Load agent config
-    let (config, _is_legacy) = load_agent_config(&agent)?;
+    let config = load_agent_config(&agent)?;
 
     // Ensure image is built
     ensure_image_built(runtime, &agent)?;

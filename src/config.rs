@@ -44,38 +44,34 @@ pub fn get_config_home() -> (PathBuf, bool) {
 /// Load agent config with XDG-style layering
 ///
 /// Priority (highest to lowest):
-/// 1. User config in ~/.config/klotho/agents/<agent>/config.conf
-/// 2. User config in ~/.config/agent-session/agents/<agent>/config.conf (legacy)
+/// 1. User config in ~/.config/klotho/agents/<agent>/config.toml
+/// 2. User config in ~/.config/agent-session/agents/<agent>/config.toml (legacy)
 /// 3. Embedded default config (compiled into binary)
 ///
-/// Returns (config, used_legacy_path)
-pub fn load_agent_config(agent: &str) -> Result<(AgentConfig, bool)> {
+/// Returns the merged agent config
+pub fn load_agent_config(agent: &str) -> Result<AgentConfig> {
     // Load embedded default first (must exist)
     let embedded_content = resources::get_agent_config(agent).map_err(|_| {
         let available = resources::list_embedded_agents().join(", ");
         anyhow::anyhow!("unknown agent: {}\navailable agents: {}", agent, available)
     })?;
 
-    let mut config =
-        AgentConfig::from_keyvalue(&embedded_content).context("failed to parse embedded config")?;
+    let mut config: AgentConfig =
+        toml::from_str(&embedded_content).context("failed to parse embedded config")?;
 
     // Check for user config override
-    let (config_home, is_legacy) = get_config_home();
-    let user_config_path = config_home.join("agents").join(agent).join("config.conf");
+    let (config_home, _is_legacy) = get_config_home();
+    let user_config_path = config_home.join("agents").join(agent).join("config.toml");
 
     if user_config_path.exists() {
         let user_content =
             fs::read_to_string(&user_config_path).context("failed to read user config file")?;
-        let user_config =
-            AgentConfig::from_keyvalue(&user_content).context("failed to parse user config")?;
+        let user_config: AgentConfig =
+            toml::from_str(&user_content).context("failed to parse user config")?;
 
-        // Merge user config on top of embedded config
-        for (key, value) in user_config {
-            config.insert(key, value);
-        }
+        // User config completely replaces embedded config
+        config = user_config;
     }
 
-    // Convert to AgentConfig struct
-    let agent_config = AgentConfig::from_map(&config)?;
-    Ok((agent_config, is_legacy))
+    Ok(config)
 }

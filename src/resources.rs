@@ -20,9 +20,9 @@ pub fn get_entrypoint() -> Result<String> {
     Ok(String::from_utf8_lossy(&file.data).into_owned())
 }
 
-/// Get embedded agent config content
+/// Get embedded agent config content (TOML format)
 pub fn get_agent_config(agent: &str) -> Result<String> {
-    let path = format!("agents/{}/config.conf", agent);
+    let path = format!("agents/{}/config.toml", agent);
     let file = Resources::get(&path)
         .context(format!("Agent config not found: {}", path))?;
     Ok(String::from_utf8_lossy(&file.data).into_owned())
@@ -33,7 +33,7 @@ pub fn list_embedded_agents() -> Vec<String> {
     let mut agents = Vec::new();
 
     for path in Resources::iter() {
-        // Look for agents/*/config.conf patterns
+        // Look for agents/*/config.toml patterns
         if let Some(rest) = path.strip_prefix("agents/") {
             if let Some(agent) = rest.split('/').next() {
                 if !agents.contains(&agent.to_string()) {
@@ -87,7 +87,7 @@ pub fn extract_build_context() -> Result<PathBuf> {
             .context(format!("Failed to create agent dir: {}", agent))?;
 
         let config = get_agent_config(&agent)?;
-        std::fs::write(agent_dir.join("config.conf"), config)
+        std::fs::write(agent_dir.join("config.toml"), config)
             .context(format!("Failed to write config for: {}", agent))?;
 
         // Also extract opencode.json if it exists
