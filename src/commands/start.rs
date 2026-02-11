@@ -86,10 +86,12 @@ pub fn run(
     // Build mount arguments
     let mut mount_args = Vec::new();
 
-    // Project paths with :Z for SELinux
+    // Mount primary project at /home/agent/<name> so getcwd() returns the session name
+    // (symlinks won't work — the kernel resolves them in getcwd)
+    let named_workdir = format!("/home/agent/{}", name);
     for (i, path) in resolved_paths.iter().enumerate() {
-        let mount_point = if resolved_paths.len() == 1 {
-            "/workspace".to_string()
+        let mount_point = if i == 0 {
+            named_workdir.clone()
         } else {
             format!("/workspace{}", i + 1)
         };
@@ -176,11 +178,11 @@ pub fn run(
     // Get image name (prefer new, fallback to legacy)
     let image_name = get_image_name(runtime, &agent)?;
 
-    // Get working directory (first mount point)
-    let workdir = if resolved_paths.len() == 1 {
-        "/workspace".to_string()
+    // Backward-compat symlink name (/workspace or /workspace1)
+    let compat_workdir = if resolved_paths.len() == 1 {
+        "/workspace"
     } else {
-        "/workspace1".to_string()
+        "/workspace1"
     };
 
     // Prepare hapi env vars if hub is running
@@ -209,11 +211,17 @@ pub fn run(
         .arg("--userns=keep-id")
         .args(["--network", KLOTHO_NETWORK])
         .arg("--workdir")
-        .arg(&workdir)
+        .arg(&named_workdir)
         .args(&mount_args)
         .args(&hapi_env_args)
-        .arg(&image_name)
-        .args(["bash", "-c", "trap 'exit 0' TERM; while :; do sleep 1; done"]);
+        .arg(&image_name);
+
+    // Create /workspace symlink pointing to the named workdir for backward compat
+    let startup_cmd = format!(
+        "ln -sfn {} {} 2>/dev/null; trap 'exit 0' TERM; while :; do sleep 1; done",
+        named_workdir, compat_workdir
+    );
+    cmd.args(["bash", "-c", &startup_cmd]);
 
     let output = cmd.output().context("Failed to create container")?;
 
@@ -336,18 +344,26 @@ fn attach_zellij(
         .lines()
         .any(|line| line.trim().starts_with(session_name));
 
+    // Ensure /home/agent/<name> exists and cd into it.
+    // New containers mount directly there; old containers need a symlink for best-effort compat.
+    let symlink_setup = format!(
+        "test -e /home/agent/{name} || ln -sfn \"$(readlink -f .)\" /home/agent/{name}; \
+         cd /home/agent/{name} 2>/dev/null; ",
+        name = session_name
+    );
+
     // Build the attach/create command
     let zellij_cmd = if session_exists {
         // Attach to existing session
         format!(
-            "zellij attach '{}'; zellij list-sessions 2>/dev/null | sed 's/\\x1b\\[[0-9;]*m//g' | grep -q '^{} ' || exec {}",
-            session_name, session_name, config.shell
+            "{setup}zellij attach '{}'; zellij list-sessions 2>/dev/null | sed 's/\\x1b\\[[0-9;]*m//g' | grep -q '^{} ' || exec {}",
+            session_name, session_name, config.shell, setup = symlink_setup
         )
     } else {
         // Create new session with agent wrapper
         format!(
-            "zellij -s '{}'; zellij list-sessions 2>/dev/null | sed 's/\\x1b\\[[0-9;]*m//g' | grep -q '^{} ' || exec {}",
-            session_name, session_name, config.shell
+            "{setup}zellij -s '{}'; zellij list-sessions 2>/dev/null | sed 's/\\x1b\\[[0-9;]*m//g' | grep -q '^{} ' || exec {}",
+            session_name, session_name, config.shell, setup = symlink_setup
         )
     };
 

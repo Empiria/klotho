@@ -1,9 +1,11 @@
 use anyhow::{bail, Context, Result};
 use std::process::{Command, Stdio};
 use crate::agent::AgentConfig;
+use crate::commands::mobile;
 use crate::config::load_agent_config;
 use crate::container::{
-    container_status, detect_runtime, find_container, start_container, ContainerStatus,
+    container_status, detect_runtime, find_container, hapi_container_name, start_container,
+    ContainerStatus,
 };
 
 pub fn run(name: String, runtime_override: Option<&str>) -> Result<()> {
@@ -81,25 +83,48 @@ fn attach_zellij(
         .lines()
         .any(|line| line.trim().starts_with(session_name));
 
+    // Ensure /home/agent/<name> exists and cd into it.
+    // New containers mount directly there; old containers need a symlink for best-effort compat.
+    let symlink_setup = format!(
+        "test -e /home/agent/{name} || ln -sfn \"$(readlink -f .)\" /home/agent/{name}; \
+         cd /home/agent/{name} 2>/dev/null; ",
+        name = session_name
+    );
+
     // Build the attach/create command
     let zellij_cmd = if session_exists {
         // Attach to existing session
         format!(
-            "zellij attach '{}'; zellij list-sessions 2>/dev/null | sed 's/\\x1b\\[[0-9;]*m//g' | grep -q '^{} ' || exec {}",
-            session_name, session_name, config.shell
+            "{setup}zellij attach '{}'; zellij list-sessions 2>/dev/null | sed 's/\\x1b\\[[0-9;]*m//g' | grep -q '^{} ' || exec {}",
+            session_name, session_name, config.shell, setup = symlink_setup
         )
     } else {
         // Create new session with agent wrapper
         format!(
-            "zellij -s '{}'; zellij list-sessions 2>/dev/null | sed 's/\\x1b\\[[0-9;]*m//g' | grep -q '^{} ' || exec {}",
-            session_name, session_name, config.shell
+            "{setup}zellij -s '{}'; zellij list-sessions 2>/dev/null | sed 's/\\x1b\\[[0-9;]*m//g' | grep -q '^{} ' || exec {}",
+            session_name, session_name, config.shell, setup = symlink_setup
         )
     };
+
+    // Inject hapi env vars if hub is running (benefits sessions created before hub)
+    let hapi_name = hapi_container_name();
+    let mut hapi_env_args = Vec::new();
+    if let Ok(ContainerStatus::Running) = container_status(runtime, &hapi_name) {
+        if let Some(token) = mobile::get_cli_token(runtime, &hapi_name) {
+            hapi_env_args.extend_from_slice(&[
+                "-e".to_string(), format!("CLI_API_TOKEN={}", token),
+                "-e".to_string(), "HAPI_API_URL=http://klotho-hapi:3006".to_string(),
+            ]);
+        }
+    }
 
     // Run interactive exec
     let shell_env = format!("/home/agent/.local/bin/{}-session", config.name);
     let mut cmd = Command::new(runtime.as_str());
     cmd.args(["exec", "-it"]);
+    for arg in &hapi_env_args {
+        cmd.arg(arg);
+    }
     cmd.args(["-e", &format!("SHELL={}", shell_env)]);
     cmd.args(["-e", &format!("AGENT_LAUNCH_CMD={}", config.launch_cmd)]);
     cmd.args([container_name, "bash", "-c", &zellij_cmd]);
