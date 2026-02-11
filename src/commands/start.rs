@@ -18,17 +18,28 @@ use crate::resources;
 pub fn run(
     agent: Option<String>,
     name: String,
-    linked_dirs: Vec<String>,
     paths: Vec<String>,
     runtime_override: Option<&str>,
 ) -> Result<()> {
-    // Detect runtime
-    let runtime = detect_runtime(runtime_override)?;
+    // Load global and project configs early
+    let global_config = crate::config::load_global_config()?;
+    let project_config = crate::project_config::load_project_config(&std::env::current_dir()?)?;
+    let resolved = crate::config::merge_configs(&global_config, &project_config);
 
-    // Determine agent (interactive selection if None)
+    // Detect runtime (use resolved config if no override)
+    let effective_runtime = runtime_override.or(resolved.runtime.as_deref());
+    let runtime = detect_runtime(effective_runtime)?;
+
+    // Determine agent (use resolved default_agent as fallback)
     let agent = match agent {
         Some(a) => a,
-        None => select_agent_interactive()?,
+        None => {
+            if let Some(default) = &resolved.default_agent {
+                default.clone()
+            } else {
+                select_agent_interactive()?
+            }
+        }
     };
 
     // Load agent config
@@ -72,6 +83,13 @@ pub fn run(
         eprintln!("warning: failed to ensure klotho network: {}", e);
     }
 
+    // Derive named_workdir early (before volume and MCP mounting)
+    let named_workdir = resolved.project
+        .as_ref()
+        .and_then(|p| p.workdir.as_deref())
+        .map(|w| w.to_string())
+        .unwrap_or_else(|| format!("/home/agent/{}", &name));
+
     // Resolve paths (default to cwd if empty)
     let resolved_paths = if paths.is_empty() {
         vec![env::current_dir().context("Failed to get current directory")?]
@@ -86,9 +104,8 @@ pub fn run(
     // Build mount arguments
     let mut mount_args = Vec::new();
 
-    // Mount primary project at /home/agent/<name> so getcwd() returns the session name
+    // Mount primary project at named_workdir so getcwd() returns the session name
     // (symlinks won't work — the kernel resolves them in getcwd)
-    let named_workdir = format!("/home/agent/{}", name);
     for (i, path) in resolved_paths.iter().enumerate() {
         let mount_point = if i == 0 {
             named_workdir.clone()
@@ -99,80 +116,71 @@ pub fn run(
         mount_args.push(format!("{}:{}:Z", path.display(), mount_point));
     }
 
-    // KLOTHO_LINKED_DIRS: directories mounted at same path for symlink resolution
-    let mut all_linked_dirs = Vec::new();
-
-    // Parse environment variable (colon-separated)
-    if let Ok(env_dirs) = env::var("KLOTHO_LINKED_DIRS") {
-        for dir in env_dirs.split(':') {
-            let dir = dir.trim();
-            if !dir.is_empty() {
-                all_linked_dirs.push(dir.to_string());
-            }
-        }
-    }
-
-    // Add CLI flags (merge with env var)
-    all_linked_dirs.extend(linked_dirs);
-
-    // Deduplicate
-    all_linked_dirs.sort();
-    all_linked_dirs.dedup();
-
-    // Build mount arguments for linked directories
-    for dir in &all_linked_dirs {
-        let path = PathBuf::from(dir);
-        if !path.exists() {
-            eprintln!("warning: linked directory does not exist, skipping: {}", dir);
+    // Mount volumes from config (global + project, merged)
+    for vol in &resolved.volumes {
+        let (src, dest, readonly) = vol.resolve();
+        let src_path = PathBuf::from(&src);
+        if !src_path.exists() {
+            eprintln!("warning: volume source does not exist, skipping: {}", src);
             continue;
         }
-
-        let canonical = path
-            .canonicalize()
-            .context(format!("failed to resolve linked directory: {}", dir))?;
-
-        // Mount at same path as host - critical for symlink resolution
+        let canonical = src_path.canonicalize()
+            .context(format!("failed to resolve volume path: {}", src))?;
+        let suffix = if readonly { ":ro" } else { ":Z" };
         mount_args.push("-v".to_string());
-        mount_args.push(format!("{}:{}:Z", canonical.display(), canonical.display()));
+        mount_args.push(format!("{}:{}{}", canonical.display(), dest, suffix));
     }
 
-    // KLOTHO_MOUNTS: additional mount specifications (keep this, no legacy fallback)
-    if let Ok(mounts) = env::var("KLOTHO_MOUNTS") {
-        for mount in mounts.split(',') {
-            let mount = mount.trim();
-            if !mount.is_empty() {
-                mount_args.push("-v".to_string());
-                mount_args.push(mount.to_string());
-            }
-        }
-    }
-
-    // Optional mounts (if they exist)
-    let home = env::var("HOME").unwrap_or_else(|_| "/home/agent".to_string());
-    let optional_mounts = vec![
-        (format!("{}/.claude", home), "/home/agent/.claude:Z"),
-        (
-            format!("{}/.config/opencode", home),
-            "/home/agent/.config/opencode:Z",
-        ),
-        (
-            format!("{}/.config/zellij", home),
-            "/home/agent/.config/zellij:Z",
-        ),
-    ];
-
-    for (src, dst) in optional_mounts {
+    // Agent-specific optional mounts (from agent TOML config)
+    for vol in &config.optional_mounts {
+        let (src, dest, _readonly) = vol.resolve();
         if PathBuf::from(&src).exists() {
             mount_args.push("-v".to_string());
-            mount_args.push(format!("{}:{}", src, dst));
+            mount_args.push(format!("{}:{}:Z", src, dest));
         }
     }
 
-    // Always mount ~/.claude.json if it exists
+    // Zellij config mount (built-in, not agent-specific)
+    let home = env::var("HOME").unwrap_or_else(|_| "/home/agent".to_string());
+    let zellij_config = format!("{}/.config/zellij", home);
+    if PathBuf::from(&zellij_config).exists() {
+        mount_args.push("-v".to_string());
+        mount_args.push(format!("{}:/home/agent/.config/zellij:Z", zellij_config));
+    }
+
+    // Always mount ~/.claude.json if it exists (infrastructure, not agent-specific)
     let claude_json = format!("{}/.claude.json", home);
     if PathBuf::from(&claude_json).exists() {
         mount_args.push("-v".to_string());
         mount_args.push(format!("{}:/home/agent/.claude.json:Z", claude_json));
+    }
+
+    // Generate and mount MCP config for the agent at start time
+    let mcp_servers = crate::project_config::resolve_mcp_servers(&resolved.mcp, &agent);
+
+    if !mcp_servers.is_empty() {
+        let temp_dir = std::env::temp_dir().join("klotho-mcp");
+        std::fs::create_dir_all(&temp_dir)?;
+
+        match agent.as_str() {
+            "opencode" => {
+                let json = crate::project_config::mcp_to_opencode_json(&mcp_servers);
+                let json_path = temp_dir.join("opencode.json");
+                std::fs::write(&json_path, serde_json::to_string_pretty(&json)?)?;
+                mount_args.push("-v".to_string());
+                mount_args.push(format!("{}:/home/agent/.config/opencode/opencode.json:Z", json_path.display()));
+            }
+            "claude" => {
+                let json = crate::project_config::mcp_to_claude_json(&mcp_servers);
+                let json_path = temp_dir.join(".mcp.json");
+                std::fs::write(&json_path, serde_json::to_string_pretty(&json)?)?;
+                mount_args.push("-v".to_string());
+                mount_args.push(format!("{}:{}/.mcp.json:Z", json_path.display(), named_workdir));
+            }
+            _ => {
+                eprintln!("warning: MCP config translation not supported for agent '{}'", agent);
+            }
+        }
     }
 
     // Get image name (prefer new, fallback to legacy)
