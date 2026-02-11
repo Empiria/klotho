@@ -45,6 +45,83 @@ fn expand_tilde(path: &str) -> String {
     path.to_string()
 }
 
+/// Resolve which MCP servers apply to an agent
+/// If agent-specific section exists (e.g., mcp.claude), use ONLY that section (replaces shared entirely).
+/// Otherwise, use shared servers.
+pub fn resolve_mcp_servers(mcp: &McpConfig, agent: &str) -> HashMap<String, McpServerConfig> {
+    match agent {
+        "claude" => {
+            if !mcp.claude.is_empty() {
+                mcp.claude.clone()
+            } else {
+                mcp.servers.clone()
+            }
+        }
+        "opencode" => {
+            if !mcp.opencode.is_empty() {
+                mcp.opencode.clone()
+            } else {
+                mcp.servers.clone()
+            }
+        }
+        _ => mcp.servers.clone(),
+    }
+}
+
+/// Convert MCP servers to Claude Desktop JSON format (.mcp.json)
+/// Format: { "mcpServers": { "server-name": { "command": "cmd", "args": ["arg1"], "env": {...} } } }
+pub fn mcp_to_claude_json(servers: &HashMap<String, McpServerConfig>) -> serde_json::Value {
+    let mut mcp_servers = serde_json::Map::new();
+
+    for (name, config) in servers {
+        let mut server_obj = serde_json::Map::new();
+        server_obj.insert("command".to_string(), serde_json::Value::String(config.command.clone()));
+
+        if !config.args.is_empty() {
+            server_obj.insert("args".to_string(), serde_json::Value::Array(
+                config.args.iter().map(|a| serde_json::Value::String(a.clone())).collect()
+            ));
+        }
+
+        if !config.env.is_empty() {
+            let env_obj: serde_json::Map<String, serde_json::Value> = config.env.iter()
+                .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
+                .collect();
+            server_obj.insert("env".to_string(), serde_json::Value::Object(env_obj));
+        }
+
+        mcp_servers.insert(name.clone(), serde_json::Value::Object(server_obj));
+    }
+
+    let mut result = serde_json::Map::new();
+    result.insert("mcpServers".to_string(), serde_json::Value::Object(mcp_servers));
+    serde_json::Value::Object(result)
+}
+
+/// Convert MCP servers to OpenCode JSON format (opencode.json)
+/// Format: { "mcp": { "server-name": { "type": "local", "command": ["cmd", "arg1"], "enabled": true } } }
+pub fn mcp_to_opencode_json(servers: &HashMap<String, McpServerConfig>) -> serde_json::Value {
+    let mut mcp_obj = serde_json::Map::new();
+
+    for (name, config) in servers {
+        let mut server_obj = serde_json::Map::new();
+        server_obj.insert("type".to_string(), serde_json::Value::String("local".to_string()));
+
+        // Build command array: [command, arg1, arg2, ...]
+        let mut command_array = vec![serde_json::Value::String(config.command.clone())];
+        command_array.extend(config.args.iter().map(|a| serde_json::Value::String(a.clone())));
+        server_obj.insert("command".to_string(), serde_json::Value::Array(command_array));
+
+        server_obj.insert("enabled".to_string(), serde_json::Value::Bool(true));
+
+        mcp_obj.insert(name.clone(), serde_json::Value::Object(server_obj));
+    }
+
+    let mut result = serde_json::Map::new();
+    result.insert("mcp".to_string(), serde_json::Value::Object(mcp_obj));
+    serde_json::Value::Object(result)
+}
+
 /// MCP server configuration
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct McpServerConfig {
@@ -881,5 +958,118 @@ args = ["--port", "8080"]
 
         let mcp = config.mcp.unwrap();
         assert!(mcp.servers.contains_key("shared"));
+    }
+
+    #[test]
+    fn test_mcp_to_claude_json() {
+        let mut servers = HashMap::new();
+        servers.insert(
+            "test-server".to_string(),
+            McpServerConfig {
+                command: "test-cmd".to_string(),
+                args: vec!["arg1".to_string(), "arg2".to_string()],
+                env: [("KEY".to_string(), "value".to_string())].iter().cloned().collect(),
+            },
+        );
+
+        let json = mcp_to_claude_json(&servers);
+
+        assert!(json.is_object());
+        let obj = json.as_object().unwrap();
+        assert!(obj.contains_key("mcpServers"));
+
+        let mcp_servers = obj.get("mcpServers").unwrap().as_object().unwrap();
+        assert!(mcp_servers.contains_key("test-server"));
+
+        let server = mcp_servers.get("test-server").unwrap().as_object().unwrap();
+        assert_eq!(server.get("command").unwrap().as_str().unwrap(), "test-cmd");
+
+        let args = server.get("args").unwrap().as_array().unwrap();
+        assert_eq!(args.len(), 2);
+        assert_eq!(args[0].as_str().unwrap(), "arg1");
+
+        let env = server.get("env").unwrap().as_object().unwrap();
+        assert_eq!(env.get("KEY").unwrap().as_str().unwrap(), "value");
+    }
+
+    #[test]
+    fn test_mcp_to_opencode_json() {
+        let mut servers = HashMap::new();
+        servers.insert(
+            "test-server".to_string(),
+            McpServerConfig {
+                command: "test-cmd".to_string(),
+                args: vec!["arg1".to_string()],
+                env: HashMap::new(),
+            },
+        );
+
+        let json = mcp_to_opencode_json(&servers);
+
+        assert!(json.is_object());
+        let obj = json.as_object().unwrap();
+        assert!(obj.contains_key("mcp"));
+
+        let mcp = obj.get("mcp").unwrap().as_object().unwrap();
+        assert!(mcp.contains_key("test-server"));
+
+        let server = mcp.get("test-server").unwrap().as_object().unwrap();
+        assert_eq!(server.get("type").unwrap().as_str().unwrap(), "local");
+        assert_eq!(server.get("enabled").unwrap().as_bool().unwrap(), true);
+
+        let command = server.get("command").unwrap().as_array().unwrap();
+        assert_eq!(command.len(), 2);
+        assert_eq!(command[0].as_str().unwrap(), "test-cmd");
+        assert_eq!(command[1].as_str().unwrap(), "arg1");
+    }
+
+    #[test]
+    fn test_resolve_mcp_servers_agent_specific() {
+        let mut mcp = McpConfig::default();
+        mcp.servers.insert(
+            "shared".to_string(),
+            McpServerConfig {
+                command: "shared-cmd".to_string(),
+                args: vec![],
+                env: HashMap::new(),
+            },
+        );
+        mcp.claude.insert(
+            "claude-specific".to_string(),
+            McpServerConfig {
+                command: "claude-cmd".to_string(),
+                args: vec![],
+                env: HashMap::new(),
+            },
+        );
+
+        // When agent-specific exists, it replaces shared
+        let resolved = resolve_mcp_servers(&mcp, "claude");
+        assert_eq!(resolved.len(), 1);
+        assert!(resolved.contains_key("claude-specific"));
+        assert!(!resolved.contains_key("shared"));
+    }
+
+    #[test]
+    fn test_resolve_mcp_servers_fallback_to_shared() {
+        let mut mcp = McpConfig::default();
+        mcp.servers.insert(
+            "shared".to_string(),
+            McpServerConfig {
+                command: "shared-cmd".to_string(),
+                args: vec![],
+                env: HashMap::new(),
+            },
+        );
+
+        // When no agent-specific exists, use shared
+        let resolved = resolve_mcp_servers(&mcp, "claude");
+        assert_eq!(resolved.len(), 1);
+        assert!(resolved.contains_key("shared"));
+
+        // Same for opencode
+        let resolved = resolve_mcp_servers(&mcp, "opencode");
+        assert_eq!(resolved.len(), 1);
+        assert!(resolved.contains_key("shared"));
     }
 }

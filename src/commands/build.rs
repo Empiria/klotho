@@ -97,6 +97,16 @@ pub fn run_build(runtime: Runtime, agent: &str, install_packages: &[String], no_
         std::fs::copy(&klotho_toml, build_context.join(".klotho.toml"))?;
     }
 
+    // If project defines MCP config for opencode, override the bundled opencode.json
+    if let Some(ref mcp) = project_config.mcp {
+        let servers = crate::project_config::resolve_mcp_servers(mcp, agent);
+        if !servers.is_empty() && agent == "opencode" {
+            let json = crate::project_config::mcp_to_opencode_json(&servers);
+            let json_path = build_context.join("config").join("agents").join("opencode").join("opencode.json");
+            std::fs::write(&json_path, serde_json::to_string_pretty(&json)?)?;
+        }
+    }
+
     // Prepare build command
     let image_name = format!("klotho-{}:latest", agent);
     let mut build_cmd = runtime.command();
