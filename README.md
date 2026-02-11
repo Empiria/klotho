@@ -4,6 +4,27 @@ Run AI coding agents in isolated, reproducible containers with persistent termin
 
 Klotho creates containerized workspaces for AI agents like Claude Code and OpenCode, giving you consistent development environments that persist across terminal disconnects. Close your terminal, and the agent session keeps running — reattach anytime and pick up where you left off.
 
+## Quick Start
+
+**1. Build the agent image:**
+```bash
+klotho build claude    # or: klotho build opencode
+```
+
+**2. Start a session:**
+```bash
+klotho start ~/projects/my-app
+```
+
+You're now in a containerized agent session with your project mounted at `/workspace`.
+
+**3. Detach and reattach:**
+
+Press `Ctrl+C` or close your terminal — the session keeps running. Reattach later:
+```bash
+klotho start
+```
+
 ## Installation
 
 **Quick install (Linux/macOS):**
@@ -17,40 +38,7 @@ This downloads the correct binary for your platform to `~/.local/bin/klotho`.
 
 Download the latest release from [GitHub Releases](https://github.com/Empiria/klotho/releases) and place the binary in your PATH.
 
-## Quick Start
-
-**1. Set up your agent locally first**
-
-Klotho mounts your local configuration into containers, so you need your chosen agent working on your host machine first:
-
-- **Claude Code:** Install and authenticate per [Claude Code docs](https://docs.anthropic.com/en/docs/claude-code)
-- **OpenCode:** Install and configure per [OpenCode docs](https://opencode.ai/)
-
-Your existing `~/.claude.json`, `~/.claude/`, `~/.config/opencode/`, etc. will be mounted into the container automatically.
-
-**2. Build the agent image:**
-```bash
-klotho build claude    # or: klotho build opencode
-```
-
-**3. Start a session:**
-```bash
-klotho start ~/projects/my-app                 # defaults to claude
-klotho start -a opencode ~/projects/my-app     # use opencode instead
-```
-
-That's it. You're now in a containerized agent session with your project mounted at `/workspace`.
-
-**Detach anytime:** Press `Ctrl+C` or close your terminal — the session keeps running.
-
-**Reattach later:**
-```bash
-klotho start
-```
-
-## Prerequisites
-
-**Required:**
+**Prerequisites:**
 
 - **Podman 4.0+** (or Docker) — Container runtime
   ```bash
@@ -65,38 +53,25 @@ klotho start
   podman machine init && podman machine start
   ```
 
-- **A working AI agent** — Claude Code or OpenCode configured locally (see Quick Start)
-
-**Optional:**
-- `~/.claude/` — Custom Claude Code settings, MCP configs (mounted automatically)
-- `~/.config/opencode/` — OpenCode configuration (mounted automatically)
-- `~/.config/zellij/` — Custom Zellij layouts (copied into container)
-
-## Concepts
-
-**Podman vs Docker:** Podman runs containers without a daemon and without root. Commands are nearly identical to Docker.
-
-**Zellij:** Terminal multiplexer that keeps sessions alive when you disconnect. Like tmux, but with a friendlier interface.
-
-**Agents:** AI coding assistants (Claude Code, OpenCode) that run inside Klotho containers with consistent, isolated environments.
+- **A working AI agent** — Klotho mounts your local agent configuration into containers, so you need your chosen agent working on your host machine first:
+  - **Claude Code:** Install and authenticate per [Claude Code docs](https://docs.anthropic.com/en/docs/claude-code)
+  - **OpenCode:** Install and configure per [OpenCode docs](https://opencode.ai/)
 
 ## Commands
 
 ### start
 
-<details>
-<summary>Create a new session or attach to existing one</summary>
+Create a new session or attach to an existing one.
 
 ```
 klotho start [-a AGENT] [-n NAME] [project-paths...]
 ```
 
-**Options:**
-- `-a, --agent AGENT` — Agent to use
-- `-n, --name NAME` — Session name (default: default)
-- `--linked-dir DIR` — Directory to mount at same path (repeatable, for symlinks)
+| Flag | Description |
+|------|-------------|
+| `-a, --agent AGENT` | Agent to use (interactive selection if omitted) |
+| `-n, --name NAME` | Session name (default: `default`) |
 
-**Examples:**
 ```bash
 klotho start                              # Current directory, default session
 klotho start ~/projects/webapp            # Specific project
@@ -105,71 +80,42 @@ klotho start -n fullstack ~/fe ~/be       # Multiple directories
 klotho start -a opencode ~/project        # Different agent
 ```
 
-**Linked Directories:**
-
-When your workspace contains symlinks to external directories, those directories must be mounted at the same path inside the container for the symlinks to resolve:
-
-```bash
-# Using environment variable (colon-separated)
-export KLOTHO_LINKED_DIRS="/home/user/shared-tools:/home/user/team-configs"
-klotho start ~/project
-
-# Using CLI flag (repeatable)
-klotho start --linked-dir /home/user/shared-tools --linked-dir /home/user/team-configs ~/project
-```
-
-The symlinks themselves can be excluded from git via `.git/info/exclude`.
-
-**Notes:**
-- Sessions persist across terminal disconnects
-- Omit `-a` to see interactive agent menu
-
-</details>
+Sessions persist across terminal disconnects. Omit `-a` to see an interactive agent menu.
 
 ### stop
 
-<details>
-<summary>Stop a running session</summary>
+Stop a running session.
 
 ```
 klotho stop [SESSION_NAME]
 ```
 
-**Examples:**
 ```bash
 klotho stop              # Stop "default" session
 klotho stop frontend     # Stop named session
 ```
 
-</details>
-
 ### restart
 
-<details>
-<summary>Restart a stopped session and reattach</summary>
+Restart a stopped session and reattach.
 
 ```
 klotho restart [SESSION_NAME]
 ```
 
-**Examples:**
 ```bash
 klotho restart           # Restart "default" session
 klotho restart frontend  # Restart named session
 ```
 
-</details>
-
 ### ls
 
-<details>
-<summary>List all sessions with status</summary>
+List all sessions with status.
 
 ```
 klotho ls
 ```
 
-**Output:**
 ```
 NAME                 AGENT        STATUS
 default              claude       running
@@ -177,97 +123,239 @@ frontend             claude       stopped
 backend              opencode     running
 ```
 
-</details>
-
 ### rm
 
-<details>
-<summary>Remove a stopped session</summary>
+Remove a stopped session.
 
 ```
 klotho rm [-f|--force] [SESSION_NAME]
 ```
 
-**Examples:**
 ```bash
 klotho rm frontend       # Remove with confirmation
 klotho rm -f frontend    # Remove without confirmation
 ```
 
-**Note:** Stop the session first with `klotho stop`.
-
-</details>
+Stop the session first with `klotho stop`.
 
 ### build
 
-<details>
-<summary>Build agent container image</summary>
+Build agent container image.
 
 ```
 klotho build [--all] [--install PKG...] [AGENT...]
 ```
 
-**Options:**
-- `--all` — Build all configured agents
-- `--install PKG` — Install additional package (repeatable, format: `manager:package`, e.g., `apt:gcc`, `pip:pytest`)
+| Flag | Description |
+|------|-------------|
+| `--all` | Build all configured agents |
+| `--install PKG` | Install additional package (repeatable, format: `manager:package`, e.g. `apt:gcc`, `pip:pytest`) |
 
-**Examples:**
 ```bash
-klotho build claude                                    # Build specific agent
-klotho build --all                                     # Build all agents
-klotho build --install apt:gcc --install pip:pytest claude  # Build with one-time packages
+klotho build claude                                        # Build specific agent
+klotho build --all                                         # Build all agents
+klotho build --install apt:gcc --install pip:pytest claude  # With extra packages
 ```
 
-**Note:** Packages from `--install` flags merge additively with `.klotho.toml` configuration. See [Project Configuration](#project-configuration-klothotoml) below.
-
-</details>
+Packages from `--install` merge additively with `.klotho.toml` packages.
 
 ### rebuild
 
-<details>
-<summary>Rebuild agent image without cache</summary>
+Rebuild agent image without cache. Same options as `build`.
 
 ```
 klotho rebuild [--all] [--install PKG...] [AGENT...]
 ```
 
-**Options:**
-- `--all` — Rebuild all configured agents
-- `--install PKG` — Install additional package (repeatable, format: `manager:package`, e.g., `apt:gcc`, `pip:pytest`)
-
 Forces a fresh build, useful when upstream tools have updated.
-
-</details>
 
 ### init
 
-<details>
-<summary>Scaffold a .klotho.toml configuration file</summary>
+Scaffold a configuration file with commented examples.
 
 ```
-klotho init
+klotho init [--global]
 ```
 
-Creates a `.klotho.toml` in the current directory with commented examples for all supported package managers (apt, pip, npm, cargo).
+| Flag | Description |
+|------|-------------|
+| `--global` | Create global config (`~/.config/klotho/config.toml`) instead of project config |
 
-**Example:**
 ```bash
-cd ~/projects/my-app
-klotho init              # Creates .klotho.toml with template
+klotho init              # Creates .klotho.toml in current directory
+klotho init --global     # Creates ~/.config/klotho/config.toml
 ```
 
-Edit the generated file to add packages, then rebuild: `klotho build claude`.
+Refuses to overwrite an existing file. Edit the generated file, then rebuild: `klotho build claude`.
 
-See [Project Configuration](#project-configuration-klothotoml) for format details.
+## Configuration
 
-**Note:** Refuses to overwrite an existing `.klotho.toml`.
+Klotho uses a layered configuration system: **global config** sets user-wide defaults, **project config** customizes per-project, and **agent configs** define how each agent is installed and run.
 
-</details>
+### Project Config (`.klotho.toml`)
 
-### mobile
+Place `.klotho.toml` in your project root (the directory you pass to `klotho start`). Run `klotho init` to scaffold one with commented examples.
 
-<details>
-<summary>Manage mobile access via hapi</summary>
+**`[project]` section** — Project metadata:
+
+```toml
+[project]
+agent = "claude"           # Default agent (skips interactive menu)
+name = "my-project"        # Session name template
+workdir = "/workspace/src" # Working directory inside container
+```
+
+**`[packages]` section** — Additional packages installed during `klotho build`:
+
+```toml
+[packages.apt]
+build-essential = "*"      # Latest version
+pkg-config = "*"
+
+[packages.pip]
+pytest = ">=7.0"           # Version constraint
+
+[packages.npm]
+typescript = "^5.0"        # Semver range
+
+[packages.cargo]
+ripgrep = "*"
+```
+
+Known recipes: `rustup` or `rust` in `[packages.cargo]` installs Rust via rustup. `nvm` or `node` in `[packages.npm]` installs Node.js via nvm.
+
+**`[[volumes]]` section** — Extra directories to mount into the container:
+
+```toml
+# Simple: mounts at the same path inside the container
+volumes = [
+    "/home/user/shared-libs",
+]
+
+# Detailed: different source and destination, optional readonly
+[[volumes]]
+src = "~/data"
+dest = "/workspace/data"
+readonly = true
+```
+
+Tilde (`~`) is expanded to `$HOME`. Simple volumes mount at the same path in the container.
+
+**`[mcp]` section** — MCP servers injected into agent configs at runtime:
+
+```toml
+# Shared servers (available to all agents)
+[mcp.servers.context7]
+command = "uvx"
+args = ["@upstash/context7-mcp"]
+
+# Agent-specific servers (replaces shared for that agent)
+[mcp.claude.custom-tool]
+command = "npx"
+args = ["-y", "my-tool"]
+env = { API_KEY = "..." }
+```
+
+If an agent-specific section exists (e.g. `[mcp.claude.*]`), it completely replaces the shared servers for that agent.
+
+**Full example:**
+
+```toml
+[project]
+agent = "claude"
+
+[packages.apt]
+build-essential = "*"
+pkg-config = "*"
+
+[packages.cargo]
+rustup = "*"
+
+[[volumes]]
+src = "~/data"
+dest = "/workspace/data"
+readonly = true
+
+[mcp.servers.context7]
+command = "uvx"
+args = ["@upstash/context7-mcp"]
+```
+
+### Global Config (`~/.config/klotho/config.toml`)
+
+User-wide defaults that apply to all projects. Run `klotho init --global` to scaffold one.
+
+```toml
+# Container runtime ("podman", "docker", or "auto")
+runtime = "podman"
+
+# Default agent for new sessions
+default_agent = "claude"
+
+# Global volumes mounted in every session
+volumes = [
+    "/home/user/shared-libs",
+]
+[[volumes]]
+src = "/etc/ssl/certs"
+dest = "/etc/ssl/certs"
+readonly = true
+
+# Global MCP servers
+[mcp.servers.context7]
+command = "uvx"
+args = ["@upstash/context7-mcp"]
+```
+
+**Merging behavior:** Global and project configs are merged at runtime. Project config takes precedence for scalar values (`agent`, `name`, `workdir`). Volumes are additive (global + project, deduplicated by source path). MCP shared servers are additive; agent-specific MCP sections in the project config completely replace the global ones for that agent.
+
+### Agent Configs
+
+Agent configs define how to install and run AI agents. Klotho ships with built-in configs for `claude` and `opencode`. You can customize them by placing a config file at:
+
+```
+~/.config/klotho/agents/<agent-name>/config.toml
+```
+
+User configs completely replace the built-in defaults for that agent.
+
+**Example** (`~/.config/klotho/agents/claude/config.toml`):
+
+```toml
+name = "claude"
+description = "Anthropic Claude Code agent"
+install_cmd = "curl -fsSL https://claude.ai/install.sh | bash"
+launch_cmd = "claude --dangerously-skip-permissions"
+shell = "/usr/bin/fish"
+env_vars = ["PATH=/home/agent/.local/bin:$PATH", "SHELL=/usr/bin/fish"]
+hapi_cmd = "hapi --dangerously-skip-permissions"
+
+[[optional_mounts]]
+src = "~/.claude"
+dest = "/home/agent/.claude"
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Identifier (must match directory name) |
+| `description` | string | Shown in menus and help |
+| `install_cmd` | string | Shell command to install agent during image build |
+| `launch_cmd` | string | Shell command to start agent |
+| `shell` | string | Default shell path |
+| `env_vars` | string array | Environment variables (`KEY=value` format) |
+| `hapi_cmd` | string (optional) | Launch command for mobile PTY bridging via hapi |
+| `optional_mounts` | volume array (optional) | Host paths to mount if they exist |
+
+**Adding a custom agent:**
+
+1. Create config: `mkdir -p ~/.config/klotho/agents/myagent`
+2. Write `~/.config/klotho/agents/myagent/config.toml` with the fields above
+3. Build image: `klotho build myagent`
+4. Start: `klotho start -a myagent ~/project`
+
+## Mobile Access
 
 Control klotho sessions from your phone using [hapi](https://github.com/tiann/hapi/). A single hapi sidecar container provides a mobile hub for all your agent sessions.
 
@@ -299,110 +387,7 @@ Unpairs a connected mobile device (interactive selection).
 - Uses built-in relay (WireGuard + TLS) for secure remote access
 - Connection persists across restarts — scan QR once, reconnect automatically
 - All sessions automatically register with the hub when it's running
-
-**Custom tunnel (optional):**
-
-Set `HAPI_PUBLIC_URL` environment variable to use your own tunnel (Cloudflare, Tailscale, etc.) instead of hapi's built-in relay.
-
-</details>
-
-## Configuration
-
-### Agent Configs
-
-Agent configs define how to install and run AI agents. Klotho comes with built-in configs for supported agents, but you can customize them by placing config files in:
-
-```
-~/.config/klotho/agents/<agent-name>/config.conf
-```
-
-User configs override the built-in defaults. For example, to customize the Claude agent:
-
-```bash
-# ~/.config/klotho/agents/claude/config.conf
-AGENT_NAME="claude"
-AGENT_DESCRIPTION="Anthropic Claude Code agent"
-AGENT_INSTALL_CMD="curl -fsSL https://claude.ai/install.sh | bash"
-AGENT_LAUNCH_CMD="claude --dangerously-skip-permissions"
-AGENT_SHELL="/usr/bin/fish"
-AGENT_ENV_VARS="PATH=/home/agent/.local/bin:\$PATH SHELL=/usr/bin/fish"
-```
-
-**Config fields:**
-
-| Field | Purpose |
-|-------|---------|
-| `AGENT_NAME` | Identifier (must match directory name) |
-| `AGENT_DESCRIPTION` | Shown in menus and help |
-| `AGENT_INSTALL_CMD` | Shell command to install agent |
-| `AGENT_LAUNCH_CMD` | Shell command to start agent |
-| `AGENT_SHELL` | Default shell path |
-| `AGENT_ENV_VARS` | Space-separated KEY=value pairs |
-
-### Adding a New Agent
-
-1. Create config: `mkdir -p ~/.config/klotho/agents/myagent && vim ~/.config/klotho/agents/myagent/config.conf`
-2. Build image: `klotho build myagent`
-3. Test: `klotho start -a myagent ~/project`
-
-### Environment Variables
-
-| Variable | Purpose |
-|----------|---------|
-| `KLOTHO_MOUNTS` | Additional mount specifications (comma-separated, e.g., `/host/path:/container/path:Z`) |
-| `KLOTHO_LINKED_DIRS` | Directories mounted at same path for symlink resolution (colon-separated) |
-
-See `klotho start --help` for details.
-
-### Project Configuration (.klotho.toml)
-
-Specify additional packages to install into agent containers on a per-project basis. Klotho supports `apt`, `pip`, `npm`, and `cargo` package managers.
-
-**Location:** Place `.klotho.toml` in your project root (the directory you pass to `klotho start`). Run `klotho init` to scaffold one with commented examples.
-
-**Format:**
-
-```toml
-[packages.apt]
-package-name = "*"      # latest version
-
-[packages.pip]
-package-name = ">=1.0"  # version constraint
-
-[packages.npm]
-package-name = "^5.0"   # semver range
-
-[packages.cargo]
-package-name = "*"
-```
-
-**Example:**
-
-The Klotho repository itself uses this configuration for Rust development:
-
-```toml
-[packages.apt]
-build-essential = "*"
-pkg-config = "*"
-
-[packages.cargo]
-rustup = "*"
-```
-
-**Known recipes:**
-
-Certain package names trigger specialized installers:
-- `rustup` or `rust` in `[packages.cargo]` — Installs Rust via the rustup installer
-- `nvm` or `node` in `[packages.npm]` — Installs Node.js via nvm
-
-**Workflow:**
-
-1. `klotho init` — Scaffold `.klotho.toml` with commented examples
-2. Edit the file to add your project's required packages
-3. `klotho build claude` — Packages are installed during the build
-4. Packages are available in all sessions using that image
-
-**Note:** `klotho build --install apt:gcc` merges additively with `.klotho.toml` — useful for one-off packages without editing the config file.
+- Set `HAPI_PUBLIC_URL` to use your own tunnel (Cloudflare, Tailscale, etc.) instead of the built-in relay
 
 ## Development
 
@@ -422,19 +407,31 @@ cargo test
 **Project structure:**
 ```
 src/
-├── main.rs          # CLI entry point
-├── commands/        # Command implementations (start, stop, ls, etc.)
-├── config/          # Agent config loading
-├── container/       # Podman/Docker runtime abstraction
-└── resources/       # Embedded Containerfile and agent configs
-config/agents/       # Agent configuration files
+├── main.rs            # CLI entry point
+├── cli.rs             # Command definitions (clap)
+├── agent.rs           # Agent config loading
+├── config.rs          # Global config + config merging
+├── project_config.rs  # Project config, volumes, MCP, packages
+├── container.rs       # Podman/Docker runtime abstraction
+├── resources.rs       # Embedded resource loader
+├── resources/         # Embedded Containerfile and agent configs
+│   └── agents/        # Built-in agent config.toml files
+└── commands/          # Command implementations
+    ├── start.rs
+    ├── stop.rs
+    ├── restart.rs
+    ├── ls.rs
+    ├── rm.rs
+    ├── build.rs
+    ├── init.rs
+    └── mobile/
 ```
 
 ## Troubleshooting
 
 ### "podman: command not found"
 
-Install Podman (see Prerequisites) or use Docker by setting `--runtime docker`.
+Install Podman (see [Installation](#installation)) or use Docker by setting `--runtime docker`.
 
 ### "Cannot connect to Podman" (macOS)
 
@@ -469,8 +466,8 @@ klotho rm SESSION_NAME
 ### Container fails to start
 
 1. Verify your agent works locally first (run `claude` or `opencode` outside klotho)
-2. Check that config files exist (`~/.claude.json` for Claude, `~/.config/opencode/` for OpenCode)
-3. Rebuild the image: `klotho rebuild claude` (or `klotho rebuild opencode`)
+2. Check that config files exist (`~/.claude/` for Claude, `~/.config/opencode/` for OpenCode)
+3. Rebuild the image: `klotho rebuild claude`
 
 ### "klotho mobile start" shows no QR code
 
@@ -496,9 +493,9 @@ podman network ls | grep klotho
 
 If `klotho build` fails after adding packages to `.klotho.toml`:
 
-1. Check package names are correct for the package manager (e.g., `build-essential` not `build_essential` for apt)
+1. Check package names are correct for the package manager (e.g. `build-essential` not `build_essential` for apt)
 2. Verify TOML syntax: `[packages.apt]` not `[packages.APT]`
-3. Try installing the package manually first: `sudo apt install <package>` to confirm it exists
+3. Try installing the package manually first to confirm it exists
 
 ### "klotho init" says file already exists
 
