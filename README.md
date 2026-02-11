@@ -514,3 +514,4 @@ If `klotho build` fails after adding packages to `.klotho.toml`:
 - [GitHub Repository](https://github.com/Empiria/klotho)
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 - [OpenCode](https://opencode.ai/)
+- [hapi](https://github.com/tiann/hapi/) — Mobile PTY bridge for remote agent access
