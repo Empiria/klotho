@@ -165,7 +165,12 @@ pub fn run_migrate(global: bool) -> Result<()> {
         let should_write = Confirm::new()
             .with_prompt(format!("Append to {}?", target_path.display()))
             .default(false)
-            .interact()?;
+            .interact()
+            .unwrap_or_else(|_| {
+                // Non-interactive mode - print instructions instead
+                println!("Run in an interactive terminal to automatically append, or copy the config above manually.");
+                false
+            });
 
         if should_write {
             let mut content = String::new();

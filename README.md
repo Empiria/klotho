@@ -230,14 +230,14 @@ Agent Credentials
 
 API keys are shown as "set" or "not configured" — never the actual values.
 
-**`klotho config migrate`** — Show how to migrate credentials to config:
+**`klotho config migrate`** — Migrate credentials to config:
 
 ```bash
-klotho config migrate           # Suggest config for .klotho.toml
-klotho config migrate --global  # Suggest config for ~/.config/klotho/config.toml
+klotho config migrate           # Add to .klotho.toml
+klotho config migrate --global  # Add to ~/.config/klotho/config.toml
 ```
 
-Detects `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` environment variables and shows the suggested `[agents.*]` configuration to add to your config file.
+Detects `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` environment variables, shows the suggested `[agents.*]` configuration, and offers to append it to your config file.
 
 ## Configuration
 
