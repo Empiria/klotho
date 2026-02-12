@@ -10,6 +10,8 @@ use crate::project_config::{load_project_config, resolve_env_vars};
 pub fn run_check() -> Result<()> {
     let global_path = get_config_home().join("config.toml");
     let project_path = std::env::current_dir()?.join(".klotho.toml");
+    let global_exists = global_path.exists();
+    let project_exists = project_path.exists();
 
     let global = load_global_config()?;
     let project = load_project_config(&std::env::current_dir()?)?;
@@ -19,6 +21,19 @@ pub fn run_check() -> Result<()> {
     println!("  Global:  {}", format_path_status(&global_path));
     println!("  Project: {}", format_path_status(&project_path));
     println!();
+
+    // If no config files exist, that's not valid
+    if !global_exists && !project_exists {
+        println!("{} No configuration found", "⚠".yellow());
+        println!();
+        println!("Create a config file:");
+        println!("  klotho init           # Create .klotho.toml in current directory");
+        println!("  klotho init --global  # Create ~/.config/klotho/config.toml");
+        println!();
+        println!("Or migrate existing credentials:");
+        println!("  klotho config migrate");
+        return Ok(());
+    }
 
     println!("{}", "Resolved Configuration".bold());
     println!(
@@ -43,6 +58,9 @@ pub fn run_check() -> Result<()> {
         println!();
     }
 
+    // Track issues for final status
+    let mut has_issues = false;
+
     // Show agent credentials (masked)
     if !resolved.agents.is_empty() {
         println!("{}", "Agent Credentials".bold());
@@ -52,7 +70,10 @@ pub fn run_check() -> Result<()> {
                     // Try to resolve env var to check if it's set
                     match resolve_env_vars(k) {
                         Ok(_) => format!("{} (env var resolved)", "set".green()),
-                        Err(_) => format!("{}", "env var NOT SET".red()),
+                        Err(_) => {
+                            has_issues = true;
+                            format!("{}", "env var NOT SET".red())
+                        }
                     }
                 }
                 Some(_) => format!("{}", "set".green()),
@@ -81,7 +102,11 @@ pub fn run_check() -> Result<()> {
         println!();
     }
 
-    println!("{} Configuration valid", "✓".green());
+    if has_issues {
+        println!("{} Configuration has issues (see above)", "⚠".yellow());
+    } else {
+        println!("{} Configuration valid", "✓".green());
+    }
 
     Ok(())
 }
