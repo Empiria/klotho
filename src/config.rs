@@ -80,6 +80,9 @@ pub struct GlobalConfig {
     pub mcp: Option<McpConfig>,
     #[serde(default)]
     pub agents: HashMap<String, AgentCredentials>,
+    /// Opt-in to mount host config directories (~/.claude, ~/.config/opencode)
+    #[serde(default)]
+    pub mount_host_config: bool,
 }
 
 /// Resolved configuration after merging global and project configs
@@ -140,8 +143,8 @@ pub fn merge_configs(global: &GlobalConfig, project: &KlothoConfig) -> ResolvedC
         agents.insert(name.clone(), creds.clone());
     }
 
-    // mount_host_config: project overrides global (default false)
-    let mount_host_config = project.mount_host_config;
+    // mount_host_config: true if either global or project sets it
+    let mount_host_config = project.mount_host_config || global.mount_host_config;
 
     ResolvedConfig {
         runtime,
@@ -234,6 +237,7 @@ args = ["--global"]
             volumes: vec![VolumeSpec::Simple("/global/data".to_string())],
             mcp: None,
             agents: HashMap::new(),
+            mount_host_config: false,
         };
         let project = KlothoConfig::default();
 
@@ -252,6 +256,7 @@ args = ["--global"]
             volumes: vec![],
             mcp: None,
             agents: HashMap::new(),
+            mount_host_config: false,
         };
         let mut project = KlothoConfig::default();
         project.project = Some(ProjectMeta {
@@ -283,6 +288,7 @@ args = ["--global"]
             ],
             mcp: None,
             agents: HashMap::new(),
+            mount_host_config: false,
         };
         let mut project = KlothoConfig::default();
         project.volumes = vec![
@@ -324,6 +330,7 @@ args = ["--global"]
             volumes: vec![],
             mcp: Some(global_mcp),
             agents: HashMap::new(),
+            mount_host_config: false,
         };
 
         let mut project_mcp = McpConfig::default();
@@ -365,6 +372,7 @@ args = ["--global"]
             volumes: vec![],
             mcp: Some(global_mcp),
             agents: HashMap::new(),
+            mount_host_config: false,
         };
 
         let mut project_mcp = McpConfig::default();
@@ -442,6 +450,7 @@ args = ["--global"]
             volumes: vec![],
             mcp: None,
             agents: global_agents,
+            mount_host_config: false,
         };
         let project = KlothoConfig::default();
 
@@ -472,6 +481,7 @@ args = ["--global"]
             volumes: vec![],
             mcp: None,
             agents: global_agents,
+            mount_host_config: false,
         };
 
         let mut project = KlothoConfig::default();
@@ -510,6 +520,7 @@ args = ["--global"]
             volumes: vec![],
             mcp: None,
             agents: global_agents,
+            mount_host_config: false,
         };
 
         let mut project = KlothoConfig::default();
@@ -542,6 +553,7 @@ args = ["--global"]
             volumes: vec![],
             mcp: None,
             agents: HashMap::new(),
+            mount_host_config: false,
         };
         let project = KlothoConfig::default();
 
@@ -558,10 +570,29 @@ args = ["--global"]
             volumes: vec![],
             mcp: None,
             agents: HashMap::new(),
+            mount_host_config: false,
         };
 
         let mut project = KlothoConfig::default();
         project.mount_host_config = true;
+
+        let resolved = merge_configs(&global, &project);
+
+        assert!(resolved.mount_host_config);
+    }
+
+    #[test]
+    fn test_mount_host_config_from_global() {
+        let global = GlobalConfig {
+            runtime: None,
+            default_agent: None,
+            volumes: vec![],
+            mcp: None,
+            agents: HashMap::new(),
+            mount_host_config: true,
+        };
+
+        let project = KlothoConfig::default();
 
         let resolved = merge_configs(&global, &project);
 
