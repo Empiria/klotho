@@ -30,7 +30,9 @@ env_vars = [
 # When CLI_API_TOKEN is set at runtime, the wrapper uses this instead of launch_cmd
 hapi_cmd = "hapi --dangerously-skip-permissions"
 
-# Agent-specific optional mounts (checked at runtime, skipped if missing)
+# Agent-specific optional mounts (only used when mount_host_config = true in user config)
+# These provide backward compatibility with host-based credential storage.
+# New users should configure credentials via [agents.claude] api_key in .klotho.toml instead.
 [[optional_mounts]]
 src = "~/.claude"
 dest = "/home/agent/.claude"
