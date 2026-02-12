@@ -35,11 +35,19 @@ fn main() -> Result<()> {
             commands::rm::run(name, force, runtime_override)?;
             Ok(())
         }
-        Commands::Build { all, install_packages, agents } => {
+        Commands::Build {
+            all,
+            install_packages,
+            agents,
+        } => {
             commands::build::run(all, agents, install_packages, false, runtime_override)?;
             Ok(())
         }
-        Commands::Rebuild { all, install_packages, agents } => {
+        Commands::Rebuild {
+            all,
+            install_packages,
+            agents,
+        } => {
             commands::build::run(all, agents, install_packages, true, runtime_override)?;
             Ok(())
         }
@@ -47,6 +55,12 @@ fn main() -> Result<()> {
             commands::init::run(global)?;
             Ok(())
         }
+        Commands::Config { command } => match command {
+            klotho::cli::ConfigCommands::Check => commands::config::run_check(),
+            klotho::cli::ConfigCommands::Migrate { global } => {
+                commands::config::run_migrate(global)
+            }
+        },
         Commands::Mobile { command } => {
             match command {
                 klotho::cli::MobileCommands::Start => {
