@@ -7,6 +7,75 @@ use crate::container::{
 
 use super::display_connection_info;
 
+/// Detect current mode from container environment variables
+fn detect_container_mode(runtime: Runtime, container_name: &str) -> String {
+    // Check container env vars to determine mode
+    let output = runtime
+        .command()
+        .args([
+            "inspect",
+            "--format",
+            "{{range .Config.Env}}{{println .}}{{end}}",
+            container_name,
+        ])
+        .output();
+
+    if let Ok(output) = output {
+        if output.status.success() {
+            let envs = String::from_utf8_lossy(&output.stdout);
+
+            // Check for HAPI_PUBLIC_URL (custom mode)
+            if envs.contains("HAPI_PUBLIC_URL=") {
+                return "custom".to_string();
+            }
+
+            // Check for HAPI_NO_RELAY (local mode)
+            if envs.contains("HAPI_NO_RELAY=true") {
+                // Try to get the bound IP from port mapping or detect LAN IP
+                if let Some(ip) = get_container_lan_ip(runtime, container_name) {
+                    return format!("local ({})", ip);
+                }
+                return "local".to_string();
+            }
+
+            // Check for custom relay
+            for line in envs.lines() {
+                if line.starts_with("HAPI_RELAY_URL=") {
+                    let url = line.trim_start_matches("HAPI_RELAY_URL=");
+                    return format!("relay ({})", url);
+                }
+            }
+        }
+    }
+
+    "relay".to_string() // Default
+}
+
+/// Get LAN IP for container in local mode
+fn get_container_lan_ip(runtime: Runtime, container_name: &str) -> Option<String> {
+    // Check port binding to see if bound to specific IP
+    let output = runtime
+        .command()
+        .args([
+            "inspect",
+            "--format",
+            "{{range $p, $conf := .NetworkSettings.Ports}}{{range $conf}}{{.HostIp}}{{end}}{{end}}",
+            container_name,
+        ])
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        let ip = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !ip.is_empty() && ip != "127.0.0.1" && ip != "0.0.0.0" {
+            return Some(ip);
+        }
+    }
+
+    // Fallback: detect LAN IP
+    super::detect_lan_ip()
+}
+
 pub fn run(runtime_override: Option<&str>) -> Result<()> {
     let runtime = detect_runtime(runtime_override)?;
     let container_name = hapi_container_name();
@@ -32,8 +101,12 @@ pub fn run(runtime_override: Option<&str>) -> Result<()> {
         }
     }
 
-    // Display running status
+    // Detect and display mode
+    let mode = detect_container_mode(runtime, &container_name);
+
+    // Display running status with mode
     println!("{}", format!("Hapi mobile hub: {}", "running").green());
+    println!("{}", format!("Mode: {}", mode).dimmed());
     println!();
 
     // Display connection info (QR code and URL)
