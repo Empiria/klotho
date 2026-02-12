@@ -200,6 +200,9 @@ pub fn run(
     // Get credential env args (API keys from config)
     let credential_env_args = get_credential_env_args(&agent, &resolved)?;
 
+    // Resolve skills for this agent and prepare env args
+    let skills_env_args = get_skills_env_args(&agent, &resolved)?;
+
     // Get image name (prefer new, fallback to legacy)
     let image_name = get_image_name(runtime, &agent)?;
 
@@ -243,6 +246,7 @@ pub fn run(
         .args(&mount_args)
         .args(&hapi_env_args)
         .args(&credential_env_args)
+        .args(&skills_env_args)
         .arg(&image_name);
 
     // Create /workspace symlink pointing to the named workdir for backward compat
@@ -302,6 +306,38 @@ fn get_credential_env_args(agent: &str, resolved: &ResolvedConfig) -> Result<Vec
             env_args.push("-e".to_string());
             env_args.push(format!("{}={}", env_var, api_key));
         }
+    }
+
+    Ok(env_args)
+}
+
+/// Get environment variable arguments for skills
+fn get_skills_env_args(agent: &str, resolved: &ResolvedConfig) -> Result<Vec<String>> {
+    use std::collections::HashMap;
+
+    let mut env_args = Vec::new();
+
+    // Resolve skills for this agent
+    let empty_skills = HashMap::new();
+    let agent_skills = resolved
+        .agents
+        .get(agent)
+        .map(|a| &a.skills)
+        .unwrap_or(&empty_skills);
+
+    let skills =
+        crate::project_config::resolve_skills_for_agent(&resolved.skills, agent_skills, agent);
+
+    // Always pass agent name for entrypoint context
+    env_args.push("-e".to_string());
+    env_args.push(format!("KLOTHO_AGENT={}", agent));
+
+    // Encode skills as JSON for entrypoint
+    if !skills.is_empty() {
+        let skills_json =
+            serde_json::to_string(&skills).context("Failed to serialize skills to JSON")?;
+        env_args.push("-e".to_string());
+        env_args.push(format!("KLOTHO_SKILLS={}", skills_json));
     }
 
     Ok(env_args)
