@@ -58,7 +58,14 @@ Download the latest release from [GitHub Releases](https://github.com/Empiria/kl
   podman machine init && podman machine start
   ```
 
-- **A working AI agent** — Klotho mounts your local agent configuration into containers, so you need your chosen agent working on your host machine first:
+- **API keys** (recommended) — Set environment variables for your AI provider:
+  ```bash
+  export ANTHROPIC_API_KEY="sk-ant-..."  # For Claude
+  export OPENAI_API_KEY="sk-..."         # For OpenCode (if using OpenAI)
+  ```
+  Then configure Klotho to use them (see [Agent Credentials](#agent-credentials)).
+
+- **Or host-based config** — If you already have agents configured on your host machine, enable `mount_host_config = true` to mount their config directories into containers:
   - **Claude Code:** Install and authenticate per [Claude Code docs](https://docs.anthropic.com/en/docs/claude-code)
   - **OpenCode:** Install and configure per [OpenCode docs](https://opencode.ai/)
 
@@ -193,6 +200,45 @@ klotho init --global     # Creates ~/.config/klotho/config.toml
 
 Refuses to overwrite an existing file. Edit the generated file, then rebuild: `klotho build claude`.
 
+### config
+
+Validate configuration or migrate credentials.
+
+```
+klotho config <check|migrate> [--global]
+```
+
+**`klotho config check`** — Show merged configuration from all sources and validate settings:
+
+```bash
+klotho config check
+```
+
+```
+Configuration Sources
+  Global:  /home/user/.config/klotho/config.toml (found)
+  Project: /home/user/project/.klotho.toml (found)
+
+Resolved Configuration
+  runtime:           podman
+  default_agent:     claude
+  mount_host_config: false
+
+Agent Credentials
+  claude.api_key: set (env var resolved)
+```
+
+API keys are shown as "set" or "not configured" — never the actual values.
+
+**`klotho config migrate`** — Show how to migrate credentials to config:
+
+```bash
+klotho config migrate           # Suggest config for .klotho.toml
+klotho config migrate --global  # Suggest config for ~/.config/klotho/config.toml
+```
+
+Detects `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` environment variables and shows the suggested `[agents.*]` configuration to add to your config file.
+
 ## Configuration
 
 Klotho uses a layered configuration system: **global config** sets user-wide defaults, **project config** customizes per-project, and **agent configs** define how each agent is installed and run.
@@ -263,11 +309,44 @@ env = { API_KEY = "..." }
 
 If an agent-specific section exists (e.g. `[mcp.claude.*]`), it completely replaces the shared servers for that agent.
 
+**`[agents]` section** — API keys for AI agents:
+
+```toml
+# Reference environment variables (recommended - keeps secrets out of config files)
+[agents.claude]
+api_key = "${ANTHROPIC_API_KEY}"
+
+[agents.opencode]
+api_key = "${ANTHROPIC_API_KEY}"  # or "${OPENAI_API_KEY}" depending on provider
+```
+
+Environment variable references use `${VAR_NAME}` syntax and are resolved at session start. If the variable isn't set, Klotho fails fast with a clear error message.
+
+You can also set keys directly (not recommended for shared configs):
+
+```toml
+[agents.claude]
+api_key = "sk-ant-api03-..."
+```
+
+**`mount_host_config`** — Mount host agent directories:
+
+```toml
+# Set to true to mount ~/.claude and ~/.config/opencode from host
+# Useful if you already have agents configured on your host machine
+mount_host_config = true
+```
+
+When `mount_host_config = false` (the default), Klotho injects API keys as environment variables (`ANTHROPIC_API_KEY`, etc.) instead of mounting host config directories. Set it to `true` if you prefer to use your existing host-based agent configuration.
+
 **Full example:**
 
 ```toml
 [project]
 agent = "claude"
+
+[agents.claude]
+api_key = "${ANTHROPIC_API_KEY}"
 
 [packages.apt]
 build-essential = "*"
@@ -297,6 +376,10 @@ runtime = "podman"
 # Default agent for new sessions
 default_agent = "claude"
 
+# Agent credentials (default keys for all projects)
+[agents.claude]
+api_key = "${ANTHROPIC_API_KEY}"
+
 # Global volumes mounted in every session
 volumes = [
     "/home/user/shared-libs",
@@ -312,7 +395,7 @@ command = "uvx"
 args = ["@upstash/context7-mcp"]
 ```
 
-**Merging behavior:** Global and project configs are merged at runtime. Project config takes precedence for scalar values (`agent`, `name`, `workdir`). Volumes are additive (global + project, deduplicated by source path). MCP shared servers are additive; agent-specific MCP sections in the project config completely replace the global ones for that agent.
+**Merging behavior:** Global and project configs are merged at runtime. Project config takes precedence for scalar values (`agent`, `name`, `workdir`). Agent credentials merge per-agent (project overrides global for the same agent name). Volumes are additive (global + project, deduplicated by source path). MCP shared servers are additive; agent-specific MCP sections in the project config completely replace the global ones for that agent.
 
 ### Agent Configs
 
@@ -351,7 +434,7 @@ dest = "/home/agent/.claude"
 | `shell` | string | Default shell path |
 | `env_vars` | string array | Environment variables (`KEY=value` format) |
 | `hapi_cmd` | string (optional) | Launch command for mobile PTY bridging via hapi |
-| `optional_mounts` | volume array (optional) | Host paths to mount if they exist |
+| `optional_mounts` | volume array (optional) | Host paths to mount if they exist (only used when `mount_host_config = true`) |
 
 **Adding a custom agent:**
 
@@ -470,9 +553,26 @@ klotho rm SESSION_NAME
 
 ### Container fails to start
 
+**If using config-based credentials:**
+1. Run `klotho config check` to verify your API key is configured and the env var is set
+2. Check that `ANTHROPIC_API_KEY` (or `OPENAI_API_KEY`) is exported in your shell
+3. Rebuild the image: `klotho rebuild claude`
+
+**If using host-based config (`mount_host_config = true`):**
 1. Verify your agent works locally first (run `claude` or `opencode` outside klotho)
 2. Check that config files exist (`~/.claude/` for Claude, `~/.config/opencode/` for OpenCode)
-3. Rebuild the image: `klotho rebuild claude`
+3. Make sure `mount_host_config = true` is set in your config
+4. Rebuild the image: `klotho rebuild claude`
+
+### "Environment variable X is not set"
+
+Your config references an environment variable that isn't set:
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."  # Add to your shell profile
+klotho config check                     # Verify it's detected
+```
+
+Environment variable names must be UPPER_SNAKE_CASE (e.g., `${ANTHROPIC_API_KEY}`, not `${anthropic_api_key}`).
 
 ### "klotho mobile start" shows no QR code
 
