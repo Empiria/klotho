@@ -5,5 +5,6 @@ pub mod ls;
 pub mod mobile;
 pub mod restart;
 pub mod rm;
+pub mod skills;
 pub mod start;
 pub mod stop;

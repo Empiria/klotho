@@ -46,6 +46,13 @@ pub enum Commands {
     /// List all sessions with status
     Ls,
 
+    /// List configured skills
+    Skills {
+        /// Show skills installed in a specific session
+        #[arg(long, short)]
+        session: Option<String>,
+    },
+
     /// Remove a stopped session
     Rm {
         /// Skip confirmation prompt

@@ -31,6 +31,10 @@ fn main() -> Result<()> {
             commands::ls::run(runtime_override)?;
             Ok(())
         }
+        Commands::Skills { session } => {
+            commands::skills::run(session, runtime_override)?;
+            Ok(())
+        }
         Commands::Rm { force, name } => {
             commands::rm::run(name, force, runtime_override)?;
             Ok(())
