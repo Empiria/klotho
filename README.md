@@ -443,6 +443,82 @@ dest = "/home/agent/.claude"
 3. Build image: `klotho build myagent`
 4. Start: `klotho start -a myagent ~/project`
 
+## Skills
+
+Skills are tools that get installed into containers at start time. Unlike packages (which are baked into images at build time), skills are installed fresh each session, making them easy to update and customize.
+
+### Configuring Skills
+
+Add skills to your `.klotho.toml`:
+
+```toml
+[skills.gsd]
+install = "npm install -g get-shit-done-cc"
+setup = "npx get-shit-done-cc --claude --global"
+```
+
+Each skill has:
+- `install` (required): The command to install the skill
+- `setup` (optional): A post-install setup command
+- `agents` (optional): List of agents to install for (defaults to all)
+
+### Example: GSD (Get Shit Done)
+
+The [GSD](https://github.com/gsd-build/get-shit-done) meta-prompting system helps structure AI coding sessions:
+
+```toml
+[skills.gsd]
+install = "npm install -g get-shit-done-cc"
+setup = "npx get-shit-done-cc --claude --global"
+```
+
+### Example: Custom Python Tool
+
+```toml
+[skills.my-tool]
+install = "pip install my-tool"
+```
+
+### Agent-Specific Skills
+
+Install a skill only for specific agents:
+
+```toml
+[skills.claude-only]
+install = "npm install -g claude-specific-tool"
+agents = ["claude"]
+```
+
+Or configure skills per-agent:
+
+```toml
+[agents.claude.skills.custom]
+install = "npm install -g claude-tool"
+
+[agents.opencode.skills.custom]
+install = "pip install opencode-tool"
+```
+
+### Listing Skills
+
+See configured skills:
+
+```bash
+klotho skills
+```
+
+See skills installed in a running session:
+
+```bash
+klotho skills --session myproject
+```
+
+### Notes
+
+- Skills are installed at container start, so the first start after adding a skill may be slower
+- If a skill installation fails, the container won't start
+- Skills use whatever package managers are available in the container (npm, pip, cargo, etc.)
+
 ## Mobile Access
 
 Control klotho sessions from your phone using [hapi](https://github.com/tiann/hapi/). A single hapi sidecar container provides a mobile hub for all your agent sessions.
