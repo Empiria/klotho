@@ -60,9 +60,9 @@ const PROJECT_CONFIG_TEMPLATE: &str = r#"# .klotho.toml - klotho project configu
 # [agents.opencode]
 # api_key = "${OPENAI_API_KEY}"  # or ANTHROPIC_API_KEY depending on provider
 #
-# # Set to false to disable mounting host config directories (~/.claude, ~/.config/opencode)
-# # Default is false - credentials are configured above instead
-# mount_host_config = false
+# # Set to true to mount host config directories (~/.claude, ~/.config/opencode)
+# # Useful if you already have agents configured on your host machine
+# # mount_host_config = true
 "#;
 
 const GLOBAL_CONFIG_TEMPLATE: &str = r#"# klotho global configuration
@@ -95,7 +95,8 @@ const GLOBAL_CONFIG_TEMPLATE: &str = r#"# klotho global configuration
 # [agents.claude]
 # api_key = "${ANTHROPIC_API_KEY}"
 #
-# # Set to true to mount host config directories (legacy behavior)
+# # Set to true to mount host config directories (~/.claude, ~/.config/opencode)
+# # Useful if you already have agents configured on your host machine
 # # mount_host_config = true
 "#;
 

@@ -234,7 +234,7 @@ pub struct KlothoConfig {
     pub mcp: Option<McpConfig>,
     #[serde(default)]
     pub agents: HashMap<String, AgentCredentials>,
-    /// Opt-in to mount host config directories (legacy behavior, default false)
+    /// Opt-in to mount host config directories (~/.claude, ~/.config/opencode)
     #[serde(default)]
     pub mount_host_config: bool,
 }
