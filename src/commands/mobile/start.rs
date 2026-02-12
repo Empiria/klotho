@@ -195,6 +195,76 @@ pub fn run(
     // Wait for hapi to initialize
     thread::sleep(Duration::from_secs(3));
 
+    // For relay mode, check if connection succeeded
+    if effective_mode == "relay" && display_url.is_none() {
+        // Wait a bit more for relay to connect
+        thread::sleep(Duration::from_secs(2));
+
+        // Check logs for relay connection error
+        let logs_output = runtime
+            .command()
+            .args(["logs", "--tail", "50", &container_name])
+            .output();
+
+        let relay_failed = if let Ok(output) = logs_output {
+            let logs = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let all_logs = format!("{}{}", logs, stderr);
+
+            // Check for common relay failure indicators
+            all_logs.contains("relay connection failed")
+                || all_logs.contains("could not connect to relay")
+                || all_logs.contains("relay unavailable")
+                || all_logs.contains("ECONNREFUSED")
+                || all_logs.contains("ETIMEDOUT")
+                // Also check if no public URL appears after reasonable wait
+                || (!all_logs.contains("https://") && !all_logs.contains("relay.hapi.run"))
+        } else {
+            false
+        };
+
+        if relay_failed {
+            println!();
+            println!("{} Relay unavailable.", "⚠".yellow());
+            println!();
+
+            use dialoguer::Confirm;
+
+            let start_local = Confirm::new()
+                .with_prompt("Start in local-only mode?")
+                .default(false)
+                .interact()?;
+
+            if start_local {
+                // Stop current container and restart in local mode
+                println!();
+                println!("{}", "Restarting in local-only mode...".bold());
+
+                // Stop and remove current container
+                runtime.command().args(["stop", &container_name]).output()?;
+                runtime.command().args(["rm", &container_name]).output()?;
+
+                // Recursive call with local mode
+                // Note: This will re-create the container with local settings
+                return run(runtime_override, true, None, cli_bind);
+            } else {
+                // User declined - show helpful message
+                println!();
+                println!("To start in local-only mode manually, run:");
+                println!("  {}", "klotho mobile start --no-relay".cyan());
+                println!();
+                println!("To use a custom relay, run:");
+                println!("  {}", "klotho mobile start --relay <url>".cyan());
+
+                // Clean up the failed container
+                runtime.command().args(["stop", &container_name]).output()?;
+                runtime.command().args(["rm", &container_name]).output()?;
+
+                bail!("Relay connection failed. See above for alternatives.");
+            }
+        }
+    }
+
     // Display appropriate URL based on mode
     if let Some(url) = &display_url {
         if effective_mode == "local" {
