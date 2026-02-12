@@ -104,34 +104,22 @@ pub fn run_migrate(global: bool) -> Result<()> {
     let claude_dir = PathBuf::from(&home).join(".claude");
     let opencode_dir = PathBuf::from(&home).join(".config/opencode");
 
-    // Check Claude credentials
-    if claude_dir.exists() {
-        println!("  {} ~/.claude directory found", "→".cyan());
-        println!("    Claude uses OAuth tokens stored in this directory.");
-        println!("    For API key usage, set ANTHROPIC_API_KEY environment variable");
-        println!("    and reference it in config: api_key = \"${{ANTHROPIC_API_KEY}}\"");
-        println!();
+    // Build suggestions based on directories and env vars
+    let mut suggestions: Vec<(&str, &str, bool)> = Vec::new(); // (agent, env_var, env_var_set)
+
+    // Claude: check directory and env var
+    if claude_dir.exists() || std::env::var("ANTHROPIC_API_KEY").is_ok() {
+        let env_set = std::env::var("ANTHROPIC_API_KEY").is_ok();
+        suggestions.push(("claude", "ANTHROPIC_API_KEY", env_set));
     }
 
-    // Check OpenCode credentials
-    if opencode_dir.exists() {
-        println!("  {} ~/.config/opencode directory found", "→".cyan());
-        println!("    OpenCode config may contain provider API keys.");
-        println!("    Set appropriate env vars (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.)");
-        println!("    and reference them in config: api_key = \"${{ANTHROPIC_API_KEY}}\"");
-        println!();
+    // OpenCode: check directory and env var
+    if opencode_dir.exists() || std::env::var("OPENAI_API_KEY").is_ok() {
+        let env_set = std::env::var("OPENAI_API_KEY").is_ok();
+        suggestions.push(("opencode", "OPENAI_API_KEY", env_set));
     }
 
-    // Check for existing env vars
-    let mut env_suggestions: Vec<(&str, &str)> = Vec::new();
-    if std::env::var("ANTHROPIC_API_KEY").is_ok() {
-        env_suggestions.push(("claude", "ANTHROPIC_API_KEY"));
-    }
-    if std::env::var("OPENAI_API_KEY").is_ok() {
-        env_suggestions.push(("opencode", "OPENAI_API_KEY"));
-    }
-
-    if env_suggestions.is_empty() && !claude_dir.exists() && !opencode_dir.exists() {
+    if suggestions.is_empty() {
         println!("No existing credentials found to migrate.");
         println!();
         println!("To configure credentials, add to your config file:");
@@ -142,69 +130,80 @@ pub fn run_migrate(global: bool) -> Result<()> {
         return Ok(());
     }
 
-    // Generate config snippet
-    if !env_suggestions.is_empty() {
-        println!("{}", "Suggested Configuration".bold());
+    // Show what was detected
+    println!("{}", "Detected".bold());
+    for (agent, env_var, env_set) in &suggestions {
+        let status = if *env_set {
+            format!("{} set", env_var.green())
+        } else {
+            format!("{} not set", env_var.yellow())
+        };
+        println!("  {}: {}", agent, status);
+    }
+    println!();
+
+    // Show suggested config
+    println!("{}", "Suggested Configuration".bold());
+    println!();
+    for (agent, env_var, _) in &suggestions {
+        println!("  [agents.{}]", agent);
+        println!("  api_key = \"${{{}}}\"", env_var);
         println!();
-        println!("Add the following to your config file:");
-        println!();
-        for (agent, env_var) in &env_suggestions {
-            println!("  [agents.{}]", agent);
-            println!("  api_key = \"${{{}}}\"", env_var);
-            println!();
+    }
+
+    // Determine target file
+    let target_path = if global {
+        get_config_home().join("config.toml")
+    } else {
+        std::env::current_dir()?.join(".klotho.toml")
+    };
+
+    // Ask user if they want to append
+    let should_write = Confirm::new()
+        .with_prompt(format!("Append to {}?", target_path.display()))
+        .default(true)
+        .interact()
+        .unwrap_or_else(|_| {
+            // Non-interactive mode - print instructions instead
+            println!("Run in an interactive terminal to automatically append, or copy the config above manually.");
+            false
+        });
+
+    if should_write {
+        let mut content = String::new();
+        content.push_str("\n# Agent credentials (migrated by klotho config migrate)\n");
+        for (agent, env_var, _) in &suggestions {
+            content.push_str(&format!("[agents.{}]\n", agent));
+            content.push_str(&format!("api_key = \"${{{}}}\"\n\n", env_var));
         }
 
-        // Determine target file
-        let target_path = if global {
-            get_config_home().join("config.toml")
-        } else {
-            std::env::current_dir()?.join(".klotho.toml")
-        };
+        // Ensure parent directory exists for global config
+        if global {
+            std::fs::create_dir_all(get_config_home())?;
+        }
 
-        // Ask user if they want to append
-        let should_write = Confirm::new()
-            .with_prompt(format!("Append to {}?", target_path.display()))
-            .default(false)
-            .interact()
-            .unwrap_or_else(|_| {
-                // Non-interactive mode - print instructions instead
-                println!("Run in an interactive terminal to automatically append, or copy the config above manually.");
-                false
-            });
+        // Append to file (create if doesn't exist)
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&target_path)
+            .context(format!("Failed to open {}", target_path.display()))?;
+        file.write_all(content.as_bytes())?;
 
-        if should_write {
-            let mut content = String::new();
-            content.push_str("\n# Agent credentials (migrated by klotho config migrate)\n");
-            for (agent, env_var) in &env_suggestions {
-                content.push_str(&format!("[agents.{}]\n", agent));
-                content.push_str(&format!("api_key = \"${{{}}}\"\n\n", env_var));
-            }
+        println!(
+            "{} Configuration written to {}",
+            "✓".green(),
+            target_path.display()
+        );
 
-            // Ensure parent directory exists for global config
-            if global {
-                std::fs::create_dir_all(get_config_home())?;
-            }
-
-            // Append to file (create if doesn't exist)
-            use std::io::Write;
-            let mut file = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&target_path)
-                .context(format!("Failed to open {}", target_path.display()))?;
-            file.write_all(content.as_bytes())?;
-
-            println!(
-                "{} Credentials written to {}",
-                "✓".green(),
-                target_path.display()
-            );
-
-            // Offer to disable host mounts
-            if claude_dir.exists() || opencode_dir.exists() {
-                println!();
-                println!("To disable host config mounting (use only klotho config), add:");
-                println!("  mount_host_config = false");
+        // Remind about env vars if any weren't set
+        let unset: Vec<_> = suggestions.iter().filter(|(_, _, set)| !set).collect();
+        if !unset.is_empty() {
+            println!();
+            println!("Remember to set these environment variables:");
+            for (_, env_var, _) in unset {
+                println!("  export {}=\"your-api-key\"", env_var);
             }
         }
     }
