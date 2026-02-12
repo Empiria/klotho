@@ -1,6 +1,6 @@
 use crate::agent::AgentConfig;
 use crate::project_config::{
-    AgentCredentials, KlothoConfig, McpConfig, Packages, ProjectMeta, VolumeSpec,
+    AgentCredentials, KlothoConfig, McpConfig, Packages, ProjectMeta, SkillConfig, VolumeSpec,
 };
 use crate::resources;
 use anyhow::{Context, Result};
@@ -83,6 +83,9 @@ pub struct GlobalConfig {
     /// Opt-in to mount host config directories (~/.claude, ~/.config/opencode)
     #[serde(default)]
     pub mount_host_config: bool,
+    /// Skills to install at container start
+    #[serde(default)]
+    pub skills: HashMap<String, SkillConfig>,
 }
 
 /// Resolved configuration after merging global and project configs
@@ -96,6 +99,8 @@ pub struct ResolvedConfig {
     pub packages: Option<Packages>,
     pub agents: HashMap<String, AgentCredentials>,
     pub mount_host_config: bool,
+    /// Skills to install at container start
+    pub skills: HashMap<String, SkillConfig>,
 }
 
 /// Load global config from ~/.config/klotho/config.toml
@@ -146,6 +151,12 @@ pub fn merge_configs(global: &GlobalConfig, project: &KlothoConfig) -> ResolvedC
     // mount_host_config: true if either global or project sets it
     let mount_host_config = project.mount_host_config || global.mount_host_config;
 
+    // Skills: merge global and project, project overrides global for same name
+    let mut skills = global.skills.clone();
+    for (name, skill) in &project.skills {
+        skills.insert(name.clone(), skill.clone());
+    }
+
     ResolvedConfig {
         runtime,
         default_agent,
@@ -155,6 +166,7 @@ pub fn merge_configs(global: &GlobalConfig, project: &KlothoConfig) -> ResolvedC
         packages: project.packages.clone(),
         agents,
         mount_host_config,
+        skills,
     }
 }
 
@@ -238,6 +250,7 @@ args = ["--global"]
             mcp: None,
             agents: HashMap::new(),
             mount_host_config: false,
+            skills: HashMap::new(),
         };
         let project = KlothoConfig::default();
 
@@ -257,6 +270,7 @@ args = ["--global"]
             mcp: None,
             agents: HashMap::new(),
             mount_host_config: false,
+            skills: HashMap::new(),
         };
         let mut project = KlothoConfig::default();
         project.project = Some(ProjectMeta {
@@ -289,6 +303,7 @@ args = ["--global"]
             mcp: None,
             agents: HashMap::new(),
             mount_host_config: false,
+            skills: HashMap::new(),
         };
         let mut project = KlothoConfig::default();
         project.volumes = vec![
@@ -331,6 +346,7 @@ args = ["--global"]
             mcp: Some(global_mcp),
             agents: HashMap::new(),
             mount_host_config: false,
+            skills: HashMap::new(),
         };
 
         let mut project_mcp = McpConfig::default();
@@ -373,6 +389,7 @@ args = ["--global"]
             mcp: Some(global_mcp),
             agents: HashMap::new(),
             mount_host_config: false,
+            skills: HashMap::new(),
         };
 
         let mut project_mcp = McpConfig::default();
@@ -441,6 +458,7 @@ args = ["--global"]
             "claude".to_string(),
             AgentCredentials {
                 api_key: Some("global-key".to_string()),
+                skills: HashMap::new(),
             },
         );
 
@@ -451,6 +469,7 @@ args = ["--global"]
             mcp: None,
             agents: global_agents,
             mount_host_config: false,
+            skills: HashMap::new(),
         };
         let project = KlothoConfig::default();
 
@@ -472,6 +491,7 @@ args = ["--global"]
             "claude".to_string(),
             AgentCredentials {
                 api_key: Some("global-key".to_string()),
+                skills: HashMap::new(),
             },
         );
 
@@ -482,6 +502,7 @@ args = ["--global"]
             mcp: None,
             agents: global_agents,
             mount_host_config: false,
+            skills: HashMap::new(),
         };
 
         let mut project = KlothoConfig::default();
@@ -489,6 +510,7 @@ args = ["--global"]
             "claude".to_string(),
             AgentCredentials {
                 api_key: Some("project-key".to_string()),
+                skills: HashMap::new(),
             },
         );
 
@@ -511,6 +533,7 @@ args = ["--global"]
             "claude".to_string(),
             AgentCredentials {
                 api_key: Some("claude-key".to_string()),
+                skills: HashMap::new(),
             },
         );
 
@@ -521,6 +544,7 @@ args = ["--global"]
             mcp: None,
             agents: global_agents,
             mount_host_config: false,
+            skills: HashMap::new(),
         };
 
         let mut project = KlothoConfig::default();
@@ -528,6 +552,7 @@ args = ["--global"]
             "opencode".to_string(),
             AgentCredentials {
                 api_key: Some("opencode-key".to_string()),
+                skills: HashMap::new(),
             },
         );
 
@@ -554,6 +579,7 @@ args = ["--global"]
             mcp: None,
             agents: HashMap::new(),
             mount_host_config: false,
+            skills: HashMap::new(),
         };
         let project = KlothoConfig::default();
 
@@ -571,6 +597,7 @@ args = ["--global"]
             mcp: None,
             agents: HashMap::new(),
             mount_host_config: false,
+            skills: HashMap::new(),
         };
 
         let mut project = KlothoConfig::default();
@@ -590,6 +617,7 @@ args = ["--global"]
             mcp: None,
             agents: HashMap::new(),
             mount_host_config: true,
+            skills: HashMap::new(),
         };
 
         let project = KlothoConfig::default();
@@ -597,5 +625,127 @@ args = ["--global"]
         let resolved = merge_configs(&global, &project);
 
         assert!(resolved.mount_host_config);
+    }
+
+    #[test]
+    fn test_merge_skills_global_only() {
+        use crate::project_config::SkillConfig;
+
+        let mut global_skills = HashMap::new();
+        global_skills.insert(
+            "gsd".to_string(),
+            SkillConfig {
+                install: "npm install -g get-shit-done-cc".to_string(),
+                setup: Some("npx get-shit-done-cc --claude --global".to_string()),
+                agents: vec![],
+            },
+        );
+
+        let global = GlobalConfig {
+            runtime: None,
+            default_agent: None,
+            volumes: vec![],
+            mcp: None,
+            agents: HashMap::new(),
+            mount_host_config: false,
+            skills: global_skills,
+        };
+        let project = KlothoConfig::default();
+
+        let resolved = merge_configs(&global, &project);
+
+        assert_eq!(resolved.skills.len(), 1);
+        assert!(resolved.skills.contains_key("gsd"));
+        let skill = resolved.skills.get("gsd").unwrap();
+        assert_eq!(skill.install, "npm install -g get-shit-done-cc");
+        assert_eq!(
+            skill.setup,
+            Some("npx get-shit-done-cc --claude --global".to_string())
+        );
+    }
+
+    #[test]
+    fn test_merge_skills_project_overrides_global() {
+        use crate::project_config::SkillConfig;
+
+        let mut global_skills = HashMap::new();
+        global_skills.insert(
+            "gsd".to_string(),
+            SkillConfig {
+                install: "npm install -g get-shit-done-cc".to_string(),
+                setup: None,
+                agents: vec![],
+            },
+        );
+
+        let global = GlobalConfig {
+            runtime: None,
+            default_agent: None,
+            volumes: vec![],
+            mcp: None,
+            agents: HashMap::new(),
+            mount_host_config: false,
+            skills: global_skills,
+        };
+
+        let mut project = KlothoConfig::default();
+        project.skills.insert(
+            "gsd".to_string(),
+            SkillConfig {
+                install: "npm install -g get-shit-done-cc@2.0".to_string(),
+                setup: Some("custom setup".to_string()),
+                agents: vec![],
+            },
+        );
+
+        let resolved = merge_configs(&global, &project);
+
+        // Project skill should override global with same name
+        assert_eq!(resolved.skills.len(), 1);
+        let skill = resolved.skills.get("gsd").unwrap();
+        assert_eq!(skill.install, "npm install -g get-shit-done-cc@2.0");
+        assert_eq!(skill.setup, Some("custom setup".to_string()));
+    }
+
+    #[test]
+    fn test_merge_skills_additive() {
+        use crate::project_config::SkillConfig;
+
+        let mut global_skills = HashMap::new();
+        global_skills.insert(
+            "gsd".to_string(),
+            SkillConfig {
+                install: "npm install -g get-shit-done-cc".to_string(),
+                setup: None,
+                agents: vec![],
+            },
+        );
+
+        let global = GlobalConfig {
+            runtime: None,
+            default_agent: None,
+            volumes: vec![],
+            mcp: None,
+            agents: HashMap::new(),
+            mount_host_config: false,
+            skills: global_skills,
+        };
+
+        let mut project = KlothoConfig::default();
+        project.skills.insert(
+            "ripgrep".to_string(),
+            SkillConfig {
+                install: "cargo install ripgrep".to_string(),
+                setup: None,
+                agents: vec![],
+            },
+        );
+
+        let resolved = merge_configs(&global, &project);
+
+        // Both skills should be present
+        assert_eq!(resolved.skills.len(), 2);
+        assert!(resolved.skills.contains_key("gsd"));
+        assert!(resolved.skills.contains_key("ripgrep"));
     }
 }
