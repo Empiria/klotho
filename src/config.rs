@@ -1,5 +1,7 @@
 use crate::agent::AgentConfig;
-use crate::project_config::{KlothoConfig, McpConfig, Packages, ProjectMeta, VolumeSpec};
+use crate::project_config::{
+    AgentCredentials, KlothoConfig, McpConfig, Packages, ProjectMeta, VolumeSpec,
+};
 use crate::resources;
 use anyhow::{Context, Result};
 use std::collections::HashMap;
@@ -76,6 +78,8 @@ pub struct GlobalConfig {
     pub volumes: Vec<VolumeSpec>,
     #[serde(default)]
     pub mcp: Option<McpConfig>,
+    #[serde(default)]
+    pub agents: HashMap<String, AgentCredentials>,
 }
 
 /// Resolved configuration after merging global and project configs
@@ -87,6 +91,8 @@ pub struct ResolvedConfig {
     pub mcp: McpConfig,
     pub project: Option<ProjectMeta>,
     pub packages: Option<Packages>,
+    pub agents: HashMap<String, AgentCredentials>,
+    pub mount_host_config: bool,
 }
 
 /// Load global config from ~/.config/klotho/config.toml
@@ -101,14 +107,14 @@ pub fn load_global_config() -> Result<GlobalConfig> {
     let contents = fs::read_to_string(&config_path)
         .context(format!("Failed to read {}", config_path.display()))?;
 
-    toml::from_str(&contents)
-        .context(format!("Failed to parse {} as TOML", config_path.display()))
+    toml::from_str(&contents).context(format!("Failed to parse {} as TOML", config_path.display()))
 }
 
 /// Merge global and project configurations
 /// Project config takes precedence over global for scalar values
 /// Volumes are additive (global + project, with deduplication)
 /// MCP configs merge: project agent-specific replaces global agent-specific, shared servers are additive
+/// Agents: merge, project credentials override global for same agent
 pub fn merge_configs(global: &GlobalConfig, project: &KlothoConfig) -> ResolvedConfig {
     // Runtime: project doesn't have this field, use global
     let runtime = global.runtime.clone();
@@ -128,6 +134,15 @@ pub fn merge_configs(global: &GlobalConfig, project: &KlothoConfig) -> ResolvedC
     // MCP: merge configs
     let mcp = merge_mcp(global.mcp.as_ref(), project.mcp.as_ref());
 
+    // Agents: merge, project credentials override global for same agent
+    let mut agents = global.agents.clone();
+    for (name, creds) in &project.agents {
+        agents.insert(name.clone(), creds.clone());
+    }
+
+    // mount_host_config: project overrides global (default false)
+    let mount_host_config = project.mount_host_config;
+
     ResolvedConfig {
         runtime,
         default_agent,
@@ -135,6 +150,8 @@ pub fn merge_configs(global: &GlobalConfig, project: &KlothoConfig) -> ResolvedC
         mcp,
         project: project.project.clone(),
         packages: project.packages.clone(),
+        agents,
+        mount_host_config,
     }
 }
 
@@ -216,6 +233,7 @@ args = ["--global"]
             default_agent: Some("claude".to_string()),
             volumes: vec![VolumeSpec::Simple("/global/data".to_string())],
             mcp: None,
+            agents: HashMap::new(),
         };
         let project = KlothoConfig::default();
 
@@ -233,6 +251,7 @@ args = ["--global"]
             default_agent: Some("opencode".to_string()),
             volumes: vec![],
             mcp: None,
+            agents: HashMap::new(),
         };
         let mut project = KlothoConfig::default();
         project.project = Some(ProjectMeta {
@@ -263,6 +282,7 @@ args = ["--global"]
                 },
             ],
             mcp: None,
+            agents: HashMap::new(),
         };
         let mut project = KlothoConfig::default();
         project.volumes = vec![
@@ -303,6 +323,7 @@ args = ["--global"]
             default_agent: None,
             volumes: vec![],
             mcp: Some(global_mcp),
+            agents: HashMap::new(),
         };
 
         let mut project_mcp = McpConfig::default();
@@ -343,6 +364,7 @@ args = ["--global"]
             default_agent: None,
             volumes: vec![],
             mcp: Some(global_mcp),
+            agents: HashMap::new(),
         };
 
         let mut project_mcp = McpConfig::default();
@@ -384,9 +406,9 @@ args = ["--global"]
         assert_eq!(deduped.len(), 2);
 
         // /data should be the detailed version (last occurrence)
-        let data_vol = deduped.iter().find(|v| {
-            matches!(v, VolumeSpec::Detailed { src, .. } if src == "/data")
-        });
+        let data_vol = deduped
+            .iter()
+            .find(|v| matches!(v, VolumeSpec::Detailed { src, .. } if src == "/data"));
         assert!(data_vol.is_some());
     }
 
@@ -399,5 +421,150 @@ args = ["--global"]
         assert!(default.default_agent.is_none());
         assert_eq!(default.volumes.len(), 0);
         assert!(default.mcp.is_none());
+        assert!(default.agents.is_empty());
+    }
+
+    #[test]
+    fn test_merge_agents_global_into_resolved() {
+        use crate::project_config::AgentCredentials;
+
+        let mut global_agents = HashMap::new();
+        global_agents.insert(
+            "claude".to_string(),
+            AgentCredentials {
+                api_key: Some("global-key".to_string()),
+            },
+        );
+
+        let global = GlobalConfig {
+            runtime: None,
+            default_agent: None,
+            volumes: vec![],
+            mcp: None,
+            agents: global_agents,
+        };
+        let project = KlothoConfig::default();
+
+        let resolved = merge_configs(&global, &project);
+
+        assert_eq!(resolved.agents.len(), 1);
+        assert_eq!(
+            resolved.agents.get("claude").unwrap().api_key,
+            Some("global-key".to_string())
+        );
+    }
+
+    #[test]
+    fn test_merge_agents_project_overrides_global() {
+        use crate::project_config::AgentCredentials;
+
+        let mut global_agents = HashMap::new();
+        global_agents.insert(
+            "claude".to_string(),
+            AgentCredentials {
+                api_key: Some("global-key".to_string()),
+            },
+        );
+
+        let global = GlobalConfig {
+            runtime: None,
+            default_agent: None,
+            volumes: vec![],
+            mcp: None,
+            agents: global_agents,
+        };
+
+        let mut project = KlothoConfig::default();
+        project.agents.insert(
+            "claude".to_string(),
+            AgentCredentials {
+                api_key: Some("project-key".to_string()),
+            },
+        );
+
+        let resolved = merge_configs(&global, &project);
+
+        // Project key should override global
+        assert_eq!(resolved.agents.len(), 1);
+        assert_eq!(
+            resolved.agents.get("claude").unwrap().api_key,
+            Some("project-key".to_string())
+        );
+    }
+
+    #[test]
+    fn test_merge_agents_additive() {
+        use crate::project_config::AgentCredentials;
+
+        let mut global_agents = HashMap::new();
+        global_agents.insert(
+            "claude".to_string(),
+            AgentCredentials {
+                api_key: Some("claude-key".to_string()),
+            },
+        );
+
+        let global = GlobalConfig {
+            runtime: None,
+            default_agent: None,
+            volumes: vec![],
+            mcp: None,
+            agents: global_agents,
+        };
+
+        let mut project = KlothoConfig::default();
+        project.agents.insert(
+            "opencode".to_string(),
+            AgentCredentials {
+                api_key: Some("opencode-key".to_string()),
+            },
+        );
+
+        let resolved = merge_configs(&global, &project);
+
+        // Both agents should be present
+        assert_eq!(resolved.agents.len(), 2);
+        assert_eq!(
+            resolved.agents.get("claude").unwrap().api_key,
+            Some("claude-key".to_string())
+        );
+        assert_eq!(
+            resolved.agents.get("opencode").unwrap().api_key,
+            Some("opencode-key".to_string())
+        );
+    }
+
+    #[test]
+    fn test_mount_host_config_defaults_false() {
+        let global = GlobalConfig {
+            runtime: None,
+            default_agent: None,
+            volumes: vec![],
+            mcp: None,
+            agents: HashMap::new(),
+        };
+        let project = KlothoConfig::default();
+
+        let resolved = merge_configs(&global, &project);
+
+        assert!(!resolved.mount_host_config);
+    }
+
+    #[test]
+    fn test_mount_host_config_from_project() {
+        let global = GlobalConfig {
+            runtime: None,
+            default_agent: None,
+            volumes: vec![],
+            mcp: None,
+            agents: HashMap::new(),
+        };
+
+        let mut project = KlothoConfig::default();
+        project.mount_host_config = true;
+
+        let resolved = merge_configs(&global, &project);
+
+        assert!(resolved.mount_host_config);
     }
 }
