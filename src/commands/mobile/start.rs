@@ -108,8 +108,43 @@ pub fn run(
     // Ensure volume exists
     ensure_volume(runtime, &hapi_volume_name())?;
 
-    // Check for HAPI_PUBLIC_URL env var
+    // Check for HAPI_PUBLIC_URL env var (backward compatibility)
     let public_url = std::env::var("HAPI_PUBLIC_URL").ok();
+
+    // Determine the effective mode and display URL
+    let (effective_mode, display_url, lan_ip) = if public_url.is_some() {
+        ("custom", public_url.clone(), None)
+    } else if no_relay {
+        // Local-only mode
+        let lan_ip = if let Some(ip) = &bind_ip {
+            ip.clone()
+        } else {
+            // Auto-detect LAN IP
+            let detected = super::detect_lan_ip();
+            let all_ips = super::get_all_lan_ips();
+
+            if all_ips.len() > 1 && detected.is_none() {
+                // Multiple interfaces, can't auto-detect
+                println!("{}", "Multiple network interfaces detected:".yellow());
+                for ip in &all_ips {
+                    println!("  {} {}", "•".cyan(), ip);
+                }
+                println!();
+                println!("Use {} to specify which IP to use.", "--bind <ip>".cyan());
+                bail!("Cannot auto-detect LAN IP with multiple interfaces");
+            }
+
+            detected
+                .or_else(|| all_ips.first().cloned())
+                .context("No LAN IP address found. Use --bind to specify.")?
+        };
+        let url = format!("http://{}:3006", lan_ip);
+        ("local", Some(url), Some(lan_ip))
+    } else if let Some(url) = &relay_url {
+        ("relay", Some(url.clone()), None)
+    } else {
+        ("relay", None, None) // Default relay, URL comes from hapi logs
+    };
 
     // Create and start the hapi container
     println!("{}", "Creating hapi mobile hub...".bold());
@@ -118,12 +153,30 @@ pub fn run(
     cmd.args(["run", "-d"])
         .args(["--name", &container_name])
         .args(["--label=klotho=true"])
-        .args(["--network", KLOTHO_NETWORK])
-        .args(["-p", "127.0.0.1:3006:3006"])
-        .args(["-e", "HAPI_LISTEN_HOST=0.0.0.0"])
+        .args(["--network", KLOTHO_NETWORK]);
+
+    // Port binding based on mode
+    // For local mode, bind to 0.0.0.0 (all interfaces)
+    // For relay mode, bind to localhost only
+    let port_binding = if effective_mode == "local" {
+        "0.0.0.0:3006:3006".to_string()
+    } else {
+        "127.0.0.1:3006:3006".to_string()
+    };
+    cmd.args(["-p", &port_binding]);
+
+    cmd.args(["-e", "HAPI_LISTEN_HOST=0.0.0.0"])
         .args(["-v", &format!("{}:/root/.hapi", hapi_volume_name())]);
 
-    // Add HAPI_PUBLIC_URL if set
+    // Pass env vars to hapi based on mode
+    if no_relay {
+        cmd.args(["-e", "HAPI_NO_RELAY=true"]);
+    }
+
+    if let Some(url) = &relay_url {
+        cmd.args(["-e", &format!("HAPI_RELAY_URL={}", url)]);
+    }
+
     if let Some(url) = &public_url {
         cmd.args(["-e", &format!("HAPI_PUBLIC_URL={}", url)]);
     }
@@ -142,8 +195,22 @@ pub fn run(
     // Wait for hapi to initialize
     thread::sleep(Duration::from_secs(3));
 
-    // Display connection info
-    display_connection_info(runtime, &container_name)?;
+    // Display appropriate URL based on mode
+    if let Some(url) = &display_url {
+        if effective_mode == "local" {
+            println!();
+            println!("{} Local mode - accessible on LAN at:", "ℹ".blue());
+            super::display_url_with_qr(url)?;
+            if let Some(ip) = &lan_ip {
+                println!("  {} Bound to {}", "Note:".dimmed(), ip.cyan());
+            }
+        } else {
+            super::display_url_with_qr(url)?;
+        }
+    } else {
+        // Wait for hapi to connect to relay and get URL from logs
+        display_connection_info(runtime, &container_name)?;
+    }
 
     Ok(())
 }

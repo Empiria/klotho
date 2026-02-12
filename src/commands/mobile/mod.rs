@@ -7,8 +7,35 @@ use anyhow::{bail, Context, Result};
 use owo_colors::OwoColorize;
 use qrcode::render::unicode;
 use qrcode::QrCode;
+use std::net::UdpSocket;
 
 use crate::container::Runtime;
+
+/// Detect local LAN IP address by attempting UDP connection
+/// Returns the IP address used to reach external network
+pub fn detect_lan_ip() -> Option<String> {
+    // Create a UDP socket and "connect" to a public IP
+    // This doesn't send any data, just determines which local IP would be used
+    let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    let local_addr = socket.local_addr().ok()?;
+    Some(local_addr.ip().to_string())
+}
+
+/// Get all non-loopback IPv4 addresses
+pub fn get_all_lan_ips() -> Vec<String> {
+    let mut ips = Vec::new();
+    if let Ok(interfaces) = get_if_addrs::get_if_addrs() {
+        for iface in interfaces {
+            if !iface.is_loopback() {
+                if let std::net::IpAddr::V4(ip) = iface.ip() {
+                    ips.push(ip.to_string());
+                }
+            }
+        }
+    }
+    ips
+}
 
 /// Display connection info with QR code
 pub fn display_connection_info(runtime: Runtime, container_name: &str) -> Result<()> {
@@ -201,7 +228,7 @@ pub fn get_cli_token(runtime: Runtime, container_name: &str) -> Option<String> {
         .map(|s| s.to_string())
 }
 
-fn display_url_with_qr(url: &str) -> Result<()> {
+pub fn display_url_with_qr(url: &str) -> Result<()> {
     let code = QrCode::new(url)?;
     let image = code
         .render::<unicode::Dense1x2>()
