@@ -56,10 +56,35 @@ fi
 # Copy mounted configs to home directory (allows writes, fixes permissions)
 [[ -d /config/zellij ]] && mkdir -p ~/.config && cp -r /config/zellij ~/.config/
 
-# Install GSD plugin if Claude and not already present
-if command -v claude &>/dev/null && [[ ! -f ~/.claude/get-shit-done/VERSION ]]; then
-    echo "Installing get-shit-done..."
-    npx -y get-shit-done-cc@latest --claude --global
+# Install skills from config (passed as JSON in KLOTHO_SKILLS env var)
+if [[ -n "${KLOTHO_SKILLS:-}" ]]; then
+    echo "Installing skills..."
+    
+    # Parse JSON and install each skill using jq
+    echo "$KLOTHO_SKILLS" | jq -r 'to_entries[] | @base64' | while read -r skill_b64; do
+        skill=$(echo "$skill_b64" | base64 -d)
+        name=$(echo "$skill" | jq -r '.key')
+        install_cmd=$(echo "$skill" | jq -r '.value.install')
+        setup_cmd=$(echo "$skill" | jq -r '.value.setup // empty')
+        
+        echo "  Installing skill: $name"
+        
+        # Run install command
+        if ! eval "$install_cmd"; then
+            echo "ERROR: Failed to install skill '$name'"
+            exit 1
+        fi
+        
+        # Run setup command if provided
+        if [[ -n "$setup_cmd" ]]; then
+            if ! eval "$setup_cmd"; then
+                echo "ERROR: Failed to run setup for skill '$name'"
+                exit 1
+            fi
+        fi
+        
+        echo "  Skill '$name' installed successfully"
+    done
 fi
 
 # Print agent version if available
