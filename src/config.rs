@@ -1,6 +1,7 @@
 use crate::agent::AgentConfig;
 use crate::project_config::{
-    AgentCredentials, KlothoConfig, McpConfig, Packages, ProjectMeta, SkillConfig, VolumeSpec,
+    AgentCredentials, KlothoConfig, McpConfig, MobileConfig, Packages, ProjectMeta, SkillConfig,
+    VolumeSpec,
 };
 use crate::resources;
 use anyhow::{Context, Result};
@@ -86,6 +87,9 @@ pub struct GlobalConfig {
     /// Skills to install at container start
     #[serde(default)]
     pub skills: HashMap<String, SkillConfig>,
+    /// Mobile hub configuration
+    #[serde(default)]
+    pub mobile: Option<MobileConfig>,
 }
 
 /// Resolved configuration after merging global and project configs
@@ -101,6 +105,8 @@ pub struct ResolvedConfig {
     pub mount_host_config: bool,
     /// Skills to install at container start
     pub skills: HashMap<String, SkillConfig>,
+    /// Mobile hub configuration
+    pub mobile: MobileConfig,
 }
 
 /// Load global config from ~/.config/klotho/config.toml
@@ -157,6 +163,9 @@ pub fn merge_configs(global: &GlobalConfig, project: &KlothoConfig) -> ResolvedC
         skills.insert(name.clone(), skill.clone());
     }
 
+    // Mobile: merge global and project configs
+    let mobile = merge_mobile_config(global.mobile.as_ref(), project.mobile.as_ref());
+
     ResolvedConfig {
         runtime,
         default_agent,
@@ -167,6 +176,7 @@ pub fn merge_configs(global: &GlobalConfig, project: &KlothoConfig) -> ResolvedC
         agents,
         mount_host_config,
         skills,
+        mobile,
     }
 }
 
@@ -216,6 +226,43 @@ fn merge_mcp(global: Option<&McpConfig>, project: Option<&McpConfig>) -> McpConf
     result
 }
 
+/// Merge mobile configurations
+/// Project config overrides global for non-default values
+/// For booleans: true overrides false
+/// For Options: Some overrides None
+fn merge_mobile_config(
+    global: Option<&MobileConfig>,
+    project: Option<&MobileConfig>,
+) -> MobileConfig {
+    let mut result = MobileConfig::default();
+
+    if let Some(g) = global {
+        if g.no_relay {
+            result.no_relay = true;
+        }
+        if g.relay.is_some() {
+            result.relay = g.relay.clone();
+        }
+        if g.bind.is_some() {
+            result.bind = g.bind.clone();
+        }
+    }
+
+    if let Some(p) = project {
+        if p.no_relay {
+            result.no_relay = true;
+        }
+        if p.relay.is_some() {
+            result.relay = p.relay.clone();
+        }
+        if p.bind.is_some() {
+            result.bind = p.bind.clone();
+        }
+    }
+
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -251,6 +298,7 @@ args = ["--global"]
             agents: HashMap::new(),
             mount_host_config: false,
             skills: HashMap::new(),
+            mobile: None,
         };
         let project = KlothoConfig::default();
 
@@ -271,6 +319,7 @@ args = ["--global"]
             agents: HashMap::new(),
             mount_host_config: false,
             skills: HashMap::new(),
+            mobile: None,
         };
         let mut project = KlothoConfig::default();
         project.project = Some(ProjectMeta {
@@ -304,6 +353,7 @@ args = ["--global"]
             agents: HashMap::new(),
             mount_host_config: false,
             skills: HashMap::new(),
+            mobile: None,
         };
         let mut project = KlothoConfig::default();
         project.volumes = vec![
@@ -347,6 +397,7 @@ args = ["--global"]
             agents: HashMap::new(),
             mount_host_config: false,
             skills: HashMap::new(),
+            mobile: None,
         };
 
         let mut project_mcp = McpConfig::default();
@@ -390,6 +441,7 @@ args = ["--global"]
             agents: HashMap::new(),
             mount_host_config: false,
             skills: HashMap::new(),
+            mobile: None,
         };
 
         let mut project_mcp = McpConfig::default();
@@ -470,6 +522,7 @@ args = ["--global"]
             agents: global_agents,
             mount_host_config: false,
             skills: HashMap::new(),
+            mobile: None,
         };
         let project = KlothoConfig::default();
 
@@ -503,6 +556,7 @@ args = ["--global"]
             agents: global_agents,
             mount_host_config: false,
             skills: HashMap::new(),
+            mobile: None,
         };
 
         let mut project = KlothoConfig::default();
@@ -545,6 +599,7 @@ args = ["--global"]
             agents: global_agents,
             mount_host_config: false,
             skills: HashMap::new(),
+            mobile: None,
         };
 
         let mut project = KlothoConfig::default();
@@ -580,6 +635,7 @@ args = ["--global"]
             agents: HashMap::new(),
             mount_host_config: false,
             skills: HashMap::new(),
+            mobile: None,
         };
         let project = KlothoConfig::default();
 
@@ -598,6 +654,7 @@ args = ["--global"]
             agents: HashMap::new(),
             mount_host_config: false,
             skills: HashMap::new(),
+            mobile: None,
         };
 
         let mut project = KlothoConfig::default();
@@ -618,6 +675,7 @@ args = ["--global"]
             agents: HashMap::new(),
             mount_host_config: true,
             skills: HashMap::new(),
+            mobile: None,
         };
 
         let project = KlothoConfig::default();
@@ -649,6 +707,7 @@ args = ["--global"]
             agents: HashMap::new(),
             mount_host_config: false,
             skills: global_skills,
+            mobile: None,
         };
         let project = KlothoConfig::default();
 
@@ -686,6 +745,7 @@ args = ["--global"]
             agents: HashMap::new(),
             mount_host_config: false,
             skills: global_skills,
+            mobile: None,
         };
 
         let mut project = KlothoConfig::default();
@@ -729,6 +789,7 @@ args = ["--global"]
             agents: HashMap::new(),
             mount_host_config: false,
             skills: global_skills,
+            mobile: None,
         };
 
         let mut project = KlothoConfig::default();
@@ -747,5 +808,128 @@ args = ["--global"]
         assert_eq!(resolved.skills.len(), 2);
         assert!(resolved.skills.contains_key("gsd"));
         assert!(resolved.skills.contains_key("ripgrep"));
+    }
+
+    #[test]
+    fn test_merge_mobile_config_global_only() {
+        let global = GlobalConfig {
+            runtime: None,
+            default_agent: None,
+            volumes: vec![],
+            mcp: None,
+            agents: HashMap::new(),
+            mount_host_config: false,
+            skills: HashMap::new(),
+            mobile: Some(MobileConfig {
+                no_relay: true,
+                relay: Some("https://global-relay.example.com".to_string()),
+                bind: None,
+            }),
+        };
+        let project = KlothoConfig::default();
+
+        let resolved = merge_configs(&global, &project);
+
+        assert!(resolved.mobile.no_relay);
+        assert_eq!(
+            resolved.mobile.relay,
+            Some("https://global-relay.example.com".to_string())
+        );
+        assert_eq!(resolved.mobile.bind, None);
+    }
+
+    #[test]
+    fn test_merge_mobile_config_project_overrides_global() {
+        let global = GlobalConfig {
+            runtime: None,
+            default_agent: None,
+            volumes: vec![],
+            mcp: None,
+            agents: HashMap::new(),
+            mount_host_config: false,
+            skills: HashMap::new(),
+            mobile: Some(MobileConfig {
+                no_relay: false,
+                relay: Some("https://global-relay.example.com".to_string()),
+                bind: Some("10.0.0.1".to_string()),
+            }),
+        };
+
+        let mut project = KlothoConfig::default();
+        project.mobile = Some(MobileConfig {
+            no_relay: true,
+            relay: Some("https://project-relay.example.com".to_string()),
+            bind: Some("192.168.1.100".to_string()),
+        });
+
+        let resolved = merge_configs(&global, &project);
+
+        // Project values override global
+        assert!(resolved.mobile.no_relay);
+        assert_eq!(
+            resolved.mobile.relay,
+            Some("https://project-relay.example.com".to_string())
+        );
+        assert_eq!(resolved.mobile.bind, Some("192.168.1.100".to_string()));
+    }
+
+    #[test]
+    fn test_merge_mobile_config_partial_override() {
+        let global = GlobalConfig {
+            runtime: None,
+            default_agent: None,
+            volumes: vec![],
+            mcp: None,
+            agents: HashMap::new(),
+            mount_host_config: false,
+            skills: HashMap::new(),
+            mobile: Some(MobileConfig {
+                no_relay: false,
+                relay: Some("https://global-relay.example.com".to_string()),
+                bind: Some("10.0.0.1".to_string()),
+            }),
+        };
+
+        let mut project = KlothoConfig::default();
+        // Only override bind in project
+        project.mobile = Some(MobileConfig {
+            no_relay: false,
+            relay: None,
+            bind: Some("192.168.1.100".to_string()),
+        });
+
+        let resolved = merge_configs(&global, &project);
+
+        // no_relay stays false (neither sets it true)
+        assert!(!resolved.mobile.no_relay);
+        // relay from global preserved (project has None)
+        assert_eq!(
+            resolved.mobile.relay,
+            Some("https://global-relay.example.com".to_string())
+        );
+        // bind from project
+        assert_eq!(resolved.mobile.bind, Some("192.168.1.100".to_string()));
+    }
+
+    #[test]
+    fn test_merge_mobile_config_defaults_when_neither_has_config() {
+        let global = GlobalConfig {
+            runtime: None,
+            default_agent: None,
+            volumes: vec![],
+            mcp: None,
+            agents: HashMap::new(),
+            mount_host_config: false,
+            skills: HashMap::new(),
+            mobile: None,
+        };
+        let project = KlothoConfig::default();
+
+        let resolved = merge_configs(&global, &project);
+
+        // All fields should be default
+        assert!(!resolved.mobile.no_relay);
+        assert_eq!(resolved.mobile.relay, None);
+        assert_eq!(resolved.mobile.bind, None);
     }
 }
