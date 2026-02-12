@@ -51,6 +51,18 @@ const PROJECT_CONFIG_TEMPLATE: &str = r#"# .klotho.toml - klotho project configu
 # [mcp.claude.custom-tool]
 # command = "npx"
 # args = ["-y", "my-tool"]
+
+# # Agent credentials (API keys for AI agents)
+# # Use environment variable references to avoid storing secrets in config files
+# [agents.claude]
+# api_key = "${ANTHROPIC_API_KEY}"
+#
+# [agents.opencode]
+# api_key = "${OPENAI_API_KEY}"  # or ANTHROPIC_API_KEY depending on provider
+#
+# # Set to false to disable mounting host config directories (~/.claude, ~/.config/opencode)
+# # Default is false - credentials are configured above instead
+# mount_host_config = false
 "#;
 
 const GLOBAL_CONFIG_TEMPLATE: &str = r#"# klotho global configuration
@@ -77,6 +89,14 @@ const GLOBAL_CONFIG_TEMPLATE: &str = r#"# klotho global configuration
 # [mcp.servers.context7]
 # command = "uvx"
 # args = ["@upstash/context7-mcp"]
+
+# # Agent credentials (default keys for all projects)
+# # Project-level config can override these
+# [agents.claude]
+# api_key = "${ANTHROPIC_API_KEY}"
+#
+# # Set to true to mount host config directories (legacy behavior)
+# # mount_host_config = true
 "#;
 
 /// Initialize a .klotho.toml file in the current directory or global config
@@ -98,8 +118,7 @@ fn scaffold_project_config() -> Result<()> {
     }
 
     // Write template
-    std::fs::write(config_path, PROJECT_CONFIG_TEMPLATE)
-        .context("Failed to write .klotho.toml")?;
+    std::fs::write(config_path, PROJECT_CONFIG_TEMPLATE).context("Failed to write .klotho.toml")?;
 
     eprintln!("Created .klotho.toml - edit to add packages, then run `klotho build`");
 
@@ -124,7 +143,10 @@ fn scaffold_global_config() -> Result<()> {
     std::fs::write(&config_path, GLOBAL_CONFIG_TEMPLATE)
         .context(format!("Failed to write {}", config_path.display()))?;
 
-    eprintln!("Created {} - edit to set user-wide defaults", config_path.display());
+    eprintln!(
+        "Created {} - edit to set user-wide defaults",
+        config_path.display()
+    );
 
     Ok(())
 }
