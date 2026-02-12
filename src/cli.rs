@@ -92,10 +92,28 @@ pub enum Commands {
         global: bool,
     },
 
+    /// Manage klotho configuration
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommands,
+    },
+
     /// Manage mobile access via hapi
     Mobile {
         #[command(subcommand)]
         command: MobileCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ConfigCommands {
+    /// Show merged configuration and validate settings
+    Check,
+    /// Migrate credentials from host config to klotho config
+    Migrate {
+        /// Write to global config instead of project config
+        #[arg(long)]
+        global: bool,
     },
 }
 
