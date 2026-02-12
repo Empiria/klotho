@@ -4,17 +4,38 @@ use owo_colors::OwoColorize;
 use std::thread;
 use std::time::Duration;
 
+use crate::config::{load_global_config, merge_configs};
 use crate::container::{
     container_status, detect_runtime, ensure_network, ensure_volume, hapi_container_name,
     hapi_volume_name, start_container, ContainerStatus, KLOTHO_NETWORK,
 };
+use crate::project_config::load_project_config;
 use crate::resources;
 
 use super::display_connection_info;
 
-pub fn run(runtime_override: Option<&str>) -> Result<()> {
+pub fn run(
+    runtime_override: Option<&str>,
+    cli_no_relay: bool,
+    cli_relay: Option<&str>,
+    cli_bind: Option<&str>,
+) -> Result<()> {
     let runtime = detect_runtime(runtime_override)?;
     let container_name = hapi_container_name();
+
+    // Load configs and resolve effective settings
+    let global_config = load_global_config()?;
+    let project_config = load_project_config(&std::env::current_dir()?)?;
+    let resolved = merge_configs(&global_config, &project_config);
+
+    // Resolve effective settings: CLI > config
+    let no_relay = cli_no_relay || resolved.mobile.no_relay;
+    let relay_url = cli_relay
+        .map(String::from)
+        .or_else(|| resolved.mobile.relay.clone());
+    let bind_ip = cli_bind
+        .map(String::from)
+        .or_else(|| resolved.mobile.bind.clone());
 
     // Check container status
     let status = container_status(runtime, &container_name)?;
