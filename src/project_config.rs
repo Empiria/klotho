@@ -4,12 +4,28 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 
+/// Skill configuration for installing tools into containers
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct SkillConfig {
+    /// The install command to run (required)
+    pub install: String,
+    /// Optional post-install setup command
+    #[serde(default)]
+    pub setup: Option<String>,
+    /// Which agents receive this skill (optional, defaults to all)
+    #[serde(default)]
+    pub agents: Vec<String>,
+}
+
 /// Agent credentials configuration
 #[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
 pub struct AgentCredentials {
     /// API key for this agent, supports ${ENV_VAR} syntax
     #[serde(default)]
     pub api_key: Option<String>,
+    /// Skills specific to this agent
+    #[serde(default)]
+    pub skills: HashMap<String, SkillConfig>,
 }
 
 /// Volume mount specification - shared by agent config, project config, and global config
@@ -84,6 +100,7 @@ pub fn resolve_credentials(creds: &AgentCredentials) -> Result<AgentCredentials>
             .as_ref()
             .map(|k| resolve_env_vars(k))
             .transpose()?,
+        skills: creds.skills.clone(),
     })
 }
 
@@ -108,6 +125,31 @@ pub fn resolve_mcp_servers(mcp: &McpConfig, agent: &str) -> HashMap<String, McpS
         }
         _ => mcp.servers.clone(),
     }
+}
+
+/// Resolve which skills apply to an agent
+/// Merges global skills with agent-specific skills.
+/// Agent-specific skills override global skills with the same name.
+pub fn resolve_skills_for_agent(
+    global_skills: &HashMap<String, SkillConfig>,
+    agent_skills: &HashMap<String, SkillConfig>,
+    agent: &str,
+) -> HashMap<String, SkillConfig> {
+    let mut result = HashMap::new();
+
+    // Add global skills that don't filter by agent or include this agent
+    for (name, skill) in global_skills {
+        if skill.agents.is_empty() || skill.agents.contains(&agent.to_string()) {
+            result.insert(name.clone(), skill.clone());
+        }
+    }
+
+    // Agent-specific skills override global
+    for (name, skill) in agent_skills {
+        result.insert(name.clone(), skill.clone());
+    }
+
+    result
 }
 
 /// Convert MCP servers to Claude Desktop JSON format (.mcp.json)
@@ -237,6 +279,9 @@ pub struct KlothoConfig {
     /// Opt-in to mount host config directories (~/.claude, ~/.config/opencode)
     #[serde(default)]
     pub mount_host_config: bool,
+    /// Skills to install at container start
+    #[serde(default)]
+    pub skills: HashMap<String, SkillConfig>,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -1232,6 +1277,7 @@ args = ["--port", "8080"]
 
         let creds = AgentCredentials {
             api_key: Some("${TEST_CRED_KEY}".to_string()),
+            skills: HashMap::new(),
         };
 
         let resolved = resolve_credentials(&creds).unwrap();
@@ -1242,7 +1288,10 @@ args = ["--port", "8080"]
 
     #[test]
     fn test_resolve_credentials_none() {
-        let creds = AgentCredentials { api_key: None };
+        let creds = AgentCredentials {
+            api_key: None,
+            skills: HashMap::new(),
+        };
 
         let resolved = resolve_credentials(&creds).unwrap();
         assert_eq!(resolved.api_key, None);
@@ -1281,5 +1330,190 @@ mount_host_config = true
         // Default is false
         let config2: KlothoConfig = toml::from_str("").unwrap();
         assert!(!config2.mount_host_config);
+    }
+
+    #[test]
+    fn test_parse_skills_global() {
+        let toml_content = r#"
+[skills.gsd]
+install = "npm install -g get-shit-done-cc"
+setup = "npx get-shit-done-cc --claude --global"
+
+[skills.ripgrep]
+install = "cargo install ripgrep"
+"#;
+        let config: KlothoConfig = toml::from_str(toml_content).unwrap();
+
+        assert_eq!(config.skills.len(), 2);
+
+        let gsd = config.skills.get("gsd").unwrap();
+        assert_eq!(gsd.install, "npm install -g get-shit-done-cc");
+        assert_eq!(
+            gsd.setup,
+            Some("npx get-shit-done-cc --claude --global".to_string())
+        );
+        assert!(gsd.agents.is_empty());
+
+        let rg = config.skills.get("ripgrep").unwrap();
+        assert_eq!(rg.install, "cargo install ripgrep");
+        assert_eq!(rg.setup, None);
+    }
+
+    #[test]
+    fn test_parse_skills_with_agents_filter() {
+        let toml_content = r#"
+[skills.claude-only]
+install = "npm install -g claude-tool"
+agents = ["claude"]
+
+[skills.both]
+install = "cargo install shared-tool"
+agents = ["claude", "opencode"]
+"#;
+        let config: KlothoConfig = toml::from_str(toml_content).unwrap();
+
+        let claude_only = config.skills.get("claude-only").unwrap();
+        assert_eq!(claude_only.agents, vec!["claude"]);
+
+        let both = config.skills.get("both").unwrap();
+        assert_eq!(both.agents, vec!["claude", "opencode"]);
+    }
+
+    #[test]
+    fn test_parse_agent_specific_skills() {
+        let toml_content = r#"
+[agents.claude]
+api_key = "sk-test"
+
+[agents.claude.skills.custom]
+install = "npm install -g custom-tool"
+setup = "custom-setup"
+
+[agents.opencode.skills.other]
+install = "cargo install other-tool"
+"#;
+        let config: KlothoConfig = toml::from_str(toml_content).unwrap();
+
+        let claude_agent = config.agents.get("claude").unwrap();
+        assert_eq!(claude_agent.api_key, Some("sk-test".to_string()));
+        assert_eq!(claude_agent.skills.len(), 1);
+
+        let custom = claude_agent.skills.get("custom").unwrap();
+        assert_eq!(custom.install, "npm install -g custom-tool");
+        assert_eq!(custom.setup, Some("custom-setup".to_string()));
+
+        let opencode_agent = config.agents.get("opencode").unwrap();
+        assert_eq!(opencode_agent.skills.len(), 1);
+        assert!(opencode_agent.skills.contains_key("other"));
+    }
+
+    #[test]
+    fn test_resolve_skills_for_agent_no_filter() {
+        let mut global_skills = HashMap::new();
+        global_skills.insert(
+            "skill1".to_string(),
+            SkillConfig {
+                install: "install1".to_string(),
+                setup: None,
+                agents: vec![], // No filter, applies to all
+            },
+        );
+
+        let agent_skills = HashMap::new();
+
+        let resolved = resolve_skills_for_agent(&global_skills, &agent_skills, "claude");
+        assert_eq!(resolved.len(), 1);
+        assert!(resolved.contains_key("skill1"));
+    }
+
+    #[test]
+    fn test_resolve_skills_for_agent_with_filter() {
+        let mut global_skills = HashMap::new();
+        global_skills.insert(
+            "claude-only".to_string(),
+            SkillConfig {
+                install: "install1".to_string(),
+                setup: None,
+                agents: vec!["claude".to_string()],
+            },
+        );
+        global_skills.insert(
+            "opencode-only".to_string(),
+            SkillConfig {
+                install: "install2".to_string(),
+                setup: None,
+                agents: vec!["opencode".to_string()],
+            },
+        );
+
+        let agent_skills = HashMap::new();
+
+        // Claude should only get claude-only skill
+        let resolved = resolve_skills_for_agent(&global_skills, &agent_skills, "claude");
+        assert_eq!(resolved.len(), 1);
+        assert!(resolved.contains_key("claude-only"));
+
+        // OpenCode should only get opencode-only skill
+        let resolved = resolve_skills_for_agent(&global_skills, &agent_skills, "opencode");
+        assert_eq!(resolved.len(), 1);
+        assert!(resolved.contains_key("opencode-only"));
+    }
+
+    #[test]
+    fn test_resolve_skills_agent_specific_overrides_global() {
+        let mut global_skills = HashMap::new();
+        global_skills.insert(
+            "skill1".to_string(),
+            SkillConfig {
+                install: "global-install".to_string(),
+                setup: None,
+                agents: vec![],
+            },
+        );
+
+        let mut agent_skills = HashMap::new();
+        agent_skills.insert(
+            "skill1".to_string(),
+            SkillConfig {
+                install: "agent-install".to_string(),
+                setup: Some("agent-setup".to_string()),
+                agents: vec![],
+            },
+        );
+
+        let resolved = resolve_skills_for_agent(&global_skills, &agent_skills, "claude");
+        assert_eq!(resolved.len(), 1);
+
+        let skill = resolved.get("skill1").unwrap();
+        assert_eq!(skill.install, "agent-install");
+        assert_eq!(skill.setup, Some("agent-setup".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_skills_merge_global_and_agent() {
+        let mut global_skills = HashMap::new();
+        global_skills.insert(
+            "global-skill".to_string(),
+            SkillConfig {
+                install: "global-install".to_string(),
+                setup: None,
+                agents: vec![],
+            },
+        );
+
+        let mut agent_skills = HashMap::new();
+        agent_skills.insert(
+            "agent-skill".to_string(),
+            SkillConfig {
+                install: "agent-install".to_string(),
+                setup: None,
+                agents: vec![],
+            },
+        );
+
+        let resolved = resolve_skills_for_agent(&global_skills, &agent_skills, "claude");
+        assert_eq!(resolved.len(), 2);
+        assert!(resolved.contains_key("global-skill"));
+        assert!(resolved.contains_key("agent-skill"));
     }
 }
