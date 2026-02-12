@@ -1,8 +1,16 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use regex_lite::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
+
+/// Agent credentials configuration
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
+pub struct AgentCredentials {
+    /// API key for this agent, supports ${ENV_VAR} syntax
+    #[serde(default)]
+    pub api_key: Option<String>,
+}
 
 /// Volume mount specification - shared by agent config, project config, and global config
 /// Supports both simple string format and detailed format with options
@@ -14,7 +22,7 @@ pub enum VolumeSpec {
         src: String,
         dest: String,
         #[serde(default)]
-        readonly: bool
+        readonly: bool,
     },
     /// Simple mount specification as a single string (e.g., "/host/path:/container/path")
     Simple(String),
@@ -28,9 +36,11 @@ impl VolumeSpec {
                 let expanded = expand_tilde(path);
                 (expanded.clone(), expanded, false)
             }
-            VolumeSpec::Detailed { src, dest, readonly } => {
-                (expand_tilde(src), expand_tilde(dest), *readonly)
-            }
+            VolumeSpec::Detailed {
+                src,
+                dest,
+                readonly,
+            } => (expand_tilde(src), expand_tilde(dest), *readonly),
         }
     }
 }
@@ -43,6 +53,38 @@ fn expand_tilde(path: &str) -> String {
         }
     }
     path.to_string()
+}
+
+/// Resolve ${VAR_NAME} references in a string
+/// Uses regex-lite which is already in Cargo.toml
+pub fn resolve_env_vars(value: &str) -> Result<String> {
+    let re = Regex::new(r"\$\{([A-Z_][A-Z0-9_]*)\}").unwrap();
+    let mut result = value.to_string();
+
+    for cap in re.captures_iter(value) {
+        let full_match = &cap[0]; // ${VAR_NAME}
+        let var_name = &cap[1]; // VAR_NAME
+
+        let var_value = std::env::var(var_name).context(format!(
+            "Environment variable {} is not set (referenced as {})",
+            var_name, full_match
+        ))?;
+
+        result = result.replace(full_match, &var_value);
+    }
+
+    Ok(result)
+}
+
+/// Resolve credentials, failing on unresolved env vars
+pub fn resolve_credentials(creds: &AgentCredentials) -> Result<AgentCredentials> {
+    Ok(AgentCredentials {
+        api_key: creds
+            .api_key
+            .as_ref()
+            .map(|k| resolve_env_vars(k))
+            .transpose()?,
+    })
 }
 
 /// Resolve which MCP servers apply to an agent
@@ -75,16 +117,28 @@ pub fn mcp_to_claude_json(servers: &HashMap<String, McpServerConfig>) -> serde_j
 
     for (name, config) in servers {
         let mut server_obj = serde_json::Map::new();
-        server_obj.insert("command".to_string(), serde_json::Value::String(config.command.clone()));
+        server_obj.insert(
+            "command".to_string(),
+            serde_json::Value::String(config.command.clone()),
+        );
 
         if !config.args.is_empty() {
-            server_obj.insert("args".to_string(), serde_json::Value::Array(
-                config.args.iter().map(|a| serde_json::Value::String(a.clone())).collect()
-            ));
+            server_obj.insert(
+                "args".to_string(),
+                serde_json::Value::Array(
+                    config
+                        .args
+                        .iter()
+                        .map(|a| serde_json::Value::String(a.clone()))
+                        .collect(),
+                ),
+            );
         }
 
         if !config.env.is_empty() {
-            let env_obj: serde_json::Map<String, serde_json::Value> = config.env.iter()
+            let env_obj: serde_json::Map<String, serde_json::Value> = config
+                .env
+                .iter()
                 .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
                 .collect();
             server_obj.insert("env".to_string(), serde_json::Value::Object(env_obj));
@@ -94,7 +148,10 @@ pub fn mcp_to_claude_json(servers: &HashMap<String, McpServerConfig>) -> serde_j
     }
 
     let mut result = serde_json::Map::new();
-    result.insert("mcpServers".to_string(), serde_json::Value::Object(mcp_servers));
+    result.insert(
+        "mcpServers".to_string(),
+        serde_json::Value::Object(mcp_servers),
+    );
     serde_json::Value::Object(result)
 }
 
@@ -105,12 +162,23 @@ pub fn mcp_to_opencode_json(servers: &HashMap<String, McpServerConfig>) -> serde
 
     for (name, config) in servers {
         let mut server_obj = serde_json::Map::new();
-        server_obj.insert("type".to_string(), serde_json::Value::String("local".to_string()));
+        server_obj.insert(
+            "type".to_string(),
+            serde_json::Value::String("local".to_string()),
+        );
 
         // Build command array: [command, arg1, arg2, ...]
         let mut command_array = vec![serde_json::Value::String(config.command.clone())];
-        command_array.extend(config.args.iter().map(|a| serde_json::Value::String(a.clone())));
-        server_obj.insert("command".to_string(), serde_json::Value::Array(command_array));
+        command_array.extend(
+            config
+                .args
+                .iter()
+                .map(|a| serde_json::Value::String(a.clone())),
+        );
+        server_obj.insert(
+            "command".to_string(),
+            serde_json::Value::Array(command_array),
+        );
 
         server_obj.insert("enabled".to_string(), serde_json::Value::Bool(true));
 
@@ -164,6 +232,11 @@ pub struct KlothoConfig {
     pub volumes: Vec<VolumeSpec>,
     #[serde(default)]
     pub mcp: Option<McpConfig>,
+    #[serde(default)]
+    pub agents: HashMap<String, AgentCredentials>,
+    /// Opt-in to mount host config directories (legacy behavior, default false)
+    #[serde(default)]
+    pub mount_host_config: bool,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -199,8 +272,7 @@ pub fn load_project_config(project_path: &Path) -> Result<KlothoConfig> {
     let contents = std::fs::read_to_string(&config_path)
         .context(format!("Failed to read {}", config_path.display()))?;
 
-    toml::from_str(&contents)
-        .context(format!("Failed to parse {} as TOML", config_path.display()))
+    toml::from_str(&contents).context(format!("Failed to parse {} as TOML", config_path.display()))
 }
 
 /// Validate package name against safe charset [a-zA-Z0-9._-+]
@@ -385,10 +457,7 @@ pub fn generate_install_commands(packages: &Packages) -> Vec<String> {
             })
             .collect();
 
-        commands.push(format!(
-            "RUN npm install -g {}",
-            pkg_specs.join(" ")
-        ));
+        commands.push(format!("RUN npm install -g {}", pkg_specs.join(" ")));
     }
 
     // Cargo packages - each gets its own RUN for better caching
@@ -538,12 +607,15 @@ key = "value"
     fn test_cli_flag_parsing() {
         let mut packages = Packages::default();
 
-        merge_cli_installs(&mut packages, &[
-            "apt:gcc".to_string(),
-            "pip:pytest==7.0".to_string(),
-            "npm:typescript=^5.0".to_string(),
-            "cargo:ripgrep".to_string(),
-        ])
+        merge_cli_installs(
+            &mut packages,
+            &[
+                "apt:gcc".to_string(),
+                "pip:pytest==7.0".to_string(),
+                "npm:typescript=^5.0".to_string(),
+                "cargo:ripgrep".to_string(),
+            ],
+        )
         .unwrap();
 
         assert_eq!(packages.apt.get("gcc"), Some(&"*".to_string()));
@@ -579,7 +651,10 @@ key = "value"
         let mut packages = Packages::default();
         let result = merge_cli_installs(&mut packages, &["unknown:package".to_string()]);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Unknown package manager"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Unknown package manager"));
     }
 
     #[test]
@@ -599,7 +674,9 @@ key = "value"
 
         assert!(validate_all_packages(&packages).is_ok());
 
-        packages.npm.insert("bad;package".to_string(), "*".to_string());
+        packages
+            .npm
+            .insert("bad;package".to_string(), "*".to_string());
         assert!(validate_all_packages(&packages).is_err());
     }
 
@@ -607,7 +684,9 @@ key = "value"
     fn test_generate_apt_commands() {
         let mut packages = Packages::default();
         packages.apt.insert("gcc".to_string(), "*".to_string());
-        packages.apt.insert("python3".to_string(), "3.11".to_string());
+        packages
+            .apt
+            .insert("python3".to_string(), "3.11".to_string());
 
         let commands = generate_install_commands(&packages);
 
@@ -622,7 +701,9 @@ key = "value"
     #[test]
     fn test_generate_pip_commands() {
         let mut packages = Packages::default();
-        packages.pip.insert("pytest".to_string(), ">=7.0".to_string());
+        packages
+            .pip
+            .insert("pytest".to_string(), ">=7.0".to_string());
         packages.pip.insert("requests".to_string(), "*".to_string());
 
         let commands = generate_install_commands(&packages);
@@ -637,8 +718,12 @@ key = "value"
     #[test]
     fn test_generate_npm_commands() {
         let mut packages = Packages::default();
-        packages.npm.insert("typescript".to_string(), "^5.0".to_string());
-        packages.npm.insert("@types/node".to_string(), "*".to_string());
+        packages
+            .npm
+            .insert("typescript".to_string(), "^5.0".to_string());
+        packages
+            .npm
+            .insert("@types/node".to_string(), "*".to_string());
 
         let commands = generate_install_commands(&packages);
 
@@ -651,8 +736,12 @@ key = "value"
     #[test]
     fn test_generate_cargo_commands() {
         let mut packages = Packages::default();
-        packages.cargo.insert("ripgrep".to_string(), "*".to_string());
-        packages.cargo.insert("fd-find".to_string(), "8.7.0".to_string());
+        packages
+            .cargo
+            .insert("ripgrep".to_string(), "*".to_string());
+        packages
+            .cargo
+            .insert("fd-find".to_string(), "8.7.0".to_string());
 
         let commands = generate_install_commands(&packages);
 
@@ -679,7 +768,9 @@ key = "value"
     fn test_rustup_recipe() {
         let mut packages = Packages::default();
         packages.cargo.insert("rustup".to_string(), "*".to_string());
-        packages.cargo.insert("ripgrep".to_string(), "*".to_string());
+        packages
+            .cargo
+            .insert("ripgrep".to_string(), "*".to_string());
 
         let commands = generate_install_commands(&packages);
 
@@ -694,7 +785,9 @@ key = "value"
     fn test_nvm_recipe() {
         let mut packages = Packages::default();
         packages.npm.insert("nvm".to_string(), "*".to_string());
-        packages.npm.insert("typescript".to_string(), "*".to_string());
+        packages
+            .npm
+            .insert("typescript".to_string(), "*".to_string());
 
         let commands = generate_install_commands(&packages);
 
@@ -723,8 +816,12 @@ key = "value"
         let mut packages = Packages::default();
         packages.apt.insert("gcc".to_string(), "*".to_string());
         packages.pip.insert("pytest".to_string(), "*".to_string());
-        packages.npm.insert("typescript".to_string(), "*".to_string());
-        packages.cargo.insert("ripgrep".to_string(), "*".to_string());
+        packages
+            .npm
+            .insert("typescript".to_string(), "*".to_string());
+        packages
+            .cargo
+            .insert("ripgrep".to_string(), "*".to_string());
 
         let commands = generate_install_commands(&packages);
 
@@ -782,8 +879,14 @@ volumes = [
 "#;
         let config: KlothoConfig = toml::from_str(toml_content).unwrap();
         assert_eq!(config.volumes.len(), 2);
-        assert_eq!(config.volumes[0], VolumeSpec::Simple("/home/user/libs".to_string()));
-        assert_eq!(config.volumes[1], VolumeSpec::Simple("/var/data".to_string()));
+        assert_eq!(
+            config.volumes[0],
+            VolumeSpec::Simple("/home/user/libs".to_string())
+        );
+        assert_eq!(
+            config.volumes[1],
+            VolumeSpec::Simple("/var/data".to_string())
+        );
     }
 
     #[test]
@@ -802,7 +905,11 @@ dest = "/container/other"
         assert_eq!(config.volumes.len(), 2);
 
         match &config.volumes[0] {
-            VolumeSpec::Detailed { src, dest, readonly } => {
+            VolumeSpec::Detailed {
+                src,
+                dest,
+                readonly,
+            } => {
                 assert_eq!(src, "/host/path");
                 assert_eq!(dest, "/container/path");
                 assert!(readonly);
@@ -811,7 +918,11 @@ dest = "/container/other"
         }
 
         match &config.volumes[1] {
-            VolumeSpec::Detailed { src, dest, readonly } => {
+            VolumeSpec::Detailed {
+                src,
+                dest,
+                readonly,
+            } => {
                 assert_eq!(src, "/host/other");
                 assert_eq!(dest, "/container/other");
                 assert!(!readonly);
@@ -830,10 +941,17 @@ volumes = [
 "#;
         let config: KlothoConfig = toml::from_str(toml_content).unwrap();
         assert_eq!(config.volumes.len(), 2);
-        assert_eq!(config.volumes[0], VolumeSpec::Simple("/simple/path".to_string()));
+        assert_eq!(
+            config.volumes[0],
+            VolumeSpec::Simple("/simple/path".to_string())
+        );
 
         match &config.volumes[1] {
-            VolumeSpec::Detailed { src, dest, readonly } => {
+            VolumeSpec::Detailed {
+                src,
+                dest,
+                readonly,
+            } => {
                 assert_eq!(src, "/host/path");
                 assert_eq!(dest, "/container/path");
                 assert!(readonly);
@@ -968,7 +1086,10 @@ args = ["--port", "8080"]
             McpServerConfig {
                 command: "test-cmd".to_string(),
                 args: vec!["arg1".to_string(), "arg2".to_string()],
-                env: [("KEY".to_string(), "value".to_string())].iter().cloned().collect(),
+                env: [("KEY".to_string(), "value".to_string())]
+                    .iter()
+                    .cloned()
+                    .collect(),
             },
         );
 
@@ -1071,5 +1192,94 @@ args = ["--port", "8080"]
         let resolved = resolve_mcp_servers(&mcp, "opencode");
         assert_eq!(resolved.len(), 1);
         assert!(resolved.contains_key("shared"));
+    }
+
+    #[test]
+    fn test_resolve_env_vars_with_valid_var() {
+        std::env::set_var("TEST_API_KEY", "sk-test-12345");
+
+        let result = resolve_env_vars("${TEST_API_KEY}").unwrap();
+        assert_eq!(result, "sk-test-12345");
+
+        // Mixed content
+        let result = resolve_env_vars("prefix-${TEST_API_KEY}-suffix").unwrap();
+        assert_eq!(result, "prefix-sk-test-12345-suffix");
+
+        std::env::remove_var("TEST_API_KEY");
+    }
+
+    #[test]
+    fn test_resolve_env_vars_with_missing_var() {
+        // Ensure the var doesn't exist
+        std::env::remove_var("MISSING_VAR_12345");
+
+        let result = resolve_env_vars("${MISSING_VAR_12345}");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("MISSING_VAR_12345"));
+        assert!(err.contains("is not set"));
+    }
+
+    #[test]
+    fn test_resolve_env_vars_no_vars() {
+        let result = resolve_env_vars("plain-string-no-vars").unwrap();
+        assert_eq!(result, "plain-string-no-vars");
+    }
+
+    #[test]
+    fn test_resolve_credentials() {
+        std::env::set_var("TEST_CRED_KEY", "resolved-key");
+
+        let creds = AgentCredentials {
+            api_key: Some("${TEST_CRED_KEY}".to_string()),
+        };
+
+        let resolved = resolve_credentials(&creds).unwrap();
+        assert_eq!(resolved.api_key, Some("resolved-key".to_string()));
+
+        std::env::remove_var("TEST_CRED_KEY");
+    }
+
+    #[test]
+    fn test_resolve_credentials_none() {
+        let creds = AgentCredentials { api_key: None };
+
+        let resolved = resolve_credentials(&creds).unwrap();
+        assert_eq!(resolved.api_key, None);
+    }
+
+    #[test]
+    fn test_parse_agents_section() {
+        let toml_content = r#"
+[agents.claude]
+api_key = "sk-test-key"
+
+[agents.opencode]
+api_key = "${OPENAI_API_KEY}"
+"#;
+        let config: KlothoConfig = toml::from_str(toml_content).unwrap();
+
+        assert_eq!(config.agents.len(), 2);
+        assert_eq!(
+            config.agents.get("claude").unwrap().api_key,
+            Some("sk-test-key".to_string())
+        );
+        assert_eq!(
+            config.agents.get("opencode").unwrap().api_key,
+            Some("${OPENAI_API_KEY}".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_mount_host_config() {
+        let toml_content = r#"
+mount_host_config = true
+"#;
+        let config: KlothoConfig = toml::from_str(toml_content).unwrap();
+        assert!(config.mount_host_config);
+
+        // Default is false
+        let config2: KlothoConfig = toml::from_str("").unwrap();
+        assert!(!config2.mount_host_config);
     }
 }
