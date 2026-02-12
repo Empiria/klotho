@@ -127,7 +127,19 @@ pub enum ConfigCommands {
 #[derive(Subcommand)]
 pub enum MobileCommands {
     /// Start the hapi mobile hub sidecar
-    Start,
+    Start {
+        /// Disable relay - run in local-only mode
+        #[arg(long)]
+        no_relay: bool,
+
+        /// Custom relay URL (for self-hosted relay)
+        #[arg(long)]
+        relay: Option<String>,
+
+        /// Bind to specific LAN IP (for local-only mode with multiple interfaces)
+        #[arg(long)]
+        bind: Option<String>,
+    },
     /// Stop the hapi mobile hub sidecar
     Stop,
     /// Show mobile hub status, URL, QR code, and connected devices

@@ -67,7 +67,11 @@ fn main() -> Result<()> {
         },
         Commands::Mobile { command } => {
             match command {
-                klotho::cli::MobileCommands::Start => {
+                klotho::cli::MobileCommands::Start {
+                    no_relay: _,
+                    relay: _,
+                    bind: _,
+                } => {
                     commands::mobile::start::run(runtime_override)?;
                 }
                 klotho::cli::MobileCommands::Stop => {
