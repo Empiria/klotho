@@ -1,12 +1,12 @@
-pub mod start;
-pub mod stop;
-pub mod status;
 pub mod revoke;
+pub mod start;
+pub mod status;
+pub mod stop;
 
 use anyhow::{bail, Context, Result};
 use owo_colors::OwoColorize;
-use qrcode::QrCode;
 use qrcode::render::unicode;
+use qrcode::QrCode;
 
 use crate::container::Runtime;
 
@@ -19,10 +19,7 @@ pub fn display_connection_info(runtime: Runtime, container_name: &str) -> Result
     }
 
     // Parse logs — hapi prints the app URL and relay URL during startup
-    let logs_output = runtime
-        .command()
-        .args(["logs", container_name])
-        .output();
+    let logs_output = runtime.command().args(["logs", container_name]).output();
 
     if let Ok(output) = logs_output {
         let logs = String::from_utf8_lossy(&output.stdout);
@@ -86,7 +83,10 @@ pub fn display_connection_info(runtime: Runtime, container_name: &str) -> Result
     println!("  {} Hapi is initializing...", "⚠".yellow());
     println!();
     println!("  The connection URL is not yet available.");
-    println!("  Run {} in a few seconds to see it.", "klotho mobile status".cyan());
+    println!(
+        "  Run {} in a few seconds to see it.",
+        "klotho mobile status".cyan()
+    );
     println!();
 
     Ok(())
@@ -99,16 +99,14 @@ pub fn display_connection_info(runtime: Runtime, container_name: &str) -> Result
 pub fn deregister_session_from_hapi(runtime: Runtime, container_name: &str) -> Result<()> {
     let hapi_name = crate::container::hapi_container_name();
 
-    let token = get_cli_token(runtime, &hapi_name)
-        .context("hapi cliApiToken not available")?;
+    let token = get_cli_token(runtime, &hapi_name).context("hapi cliApiToken not available")?;
 
     // Exchange CLI token for a JWT (required by the /api/ routes)
     let auth_body = serde_json::json!({ "accessToken": token });
     let auth_resp = ureq::post("http://127.0.0.1:3006/api/auth")
         .set("Content-Type", "application/json")
         .send_string(&serde_json::to_string(&auth_body)?)?;
-    let auth_json: serde_json::Value =
-        serde_json::from_reader(auth_resp.into_reader())?;
+    let auth_json: serde_json::Value = serde_json::from_reader(auth_resp.into_reader())?;
     let jwt = auth_json["token"]
         .as_str()
         .context("no token in auth response")?
@@ -117,7 +115,12 @@ pub fn deregister_session_from_hapi(runtime: Runtime, container_name: &str) -> R
     // Get the session container's hostname — hapi stores this in metadata.host
     let hostname_output = runtime
         .command()
-        .args(["inspect", "--format", "{{.Config.Hostname}}", container_name])
+        .args([
+            "inspect",
+            "--format",
+            "{{.Config.Hostname}}",
+            container_name,
+        ])
         .output()
         .context("failed to inspect session container")?;
     if !hostname_output.status.success() {
@@ -132,8 +135,7 @@ pub fn deregister_session_from_hapi(runtime: Runtime, container_name: &str) -> R
     let listing_resp = ureq::get("http://127.0.0.1:3006/api/sessions")
         .set("Authorization", &format!("Bearer {}", jwt))
         .call()?;
-    let listing_json: serde_json::Value =
-        serde_json::from_reader(listing_resp.into_reader())?;
+    let listing_json: serde_json::Value = serde_json::from_reader(listing_resp.into_reader())?;
 
     let sessions = listing_json["sessions"]
         .as_array()
@@ -157,9 +159,7 @@ pub fn deregister_session_from_hapi(runtime: Runtime, container_name: &str) -> R
             Err(_) => continue,
         };
 
-        let host = detail["session"]["metadata"]["host"]
-            .as_str()
-            .unwrap_or("");
+        let host = detail["session"]["metadata"]["host"].as_str().unwrap_or("");
         if host != container_hostname {
             continue;
         }

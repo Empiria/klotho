@@ -2,10 +2,7 @@ use anyhow::{bail, Result};
 use owo_colors::OwoColorize;
 use std::process::Stdio;
 
-use crate::container::{
-    detect_runtime, container_status, hapi_container_name,
-    ContainerStatus,
-};
+use crate::container::{container_status, detect_runtime, hapi_container_name, ContainerStatus};
 
 pub fn run(runtime_override: Option<&str>) -> Result<()> {
     let runtime = detect_runtime(runtime_override)?;

@@ -45,7 +45,12 @@ pub fn run(
 }
 
 /// Internal build function (also used by start command for auto-build)
-pub fn run_build(runtime: Runtime, agent: &str, install_packages: &[String], no_cache: bool) -> Result<()> {
+pub fn run_build(
+    runtime: Runtime,
+    agent: &str,
+    install_packages: &[String],
+    no_cache: bool,
+) -> Result<()> {
     // Get build context (embedded or local)
     let build_context = if resources::should_use_embedded() {
         resources::extract_build_context()?
@@ -65,8 +70,8 @@ pub fn run_build(runtime: Runtime, agent: &str, install_packages: &[String], no_
 
     // Verify Containerfile has target stage
     let containerfile_path = build_context.join("Containerfile");
-    let mut containerfile = std::fs::read_to_string(&containerfile_path)
-        .context("Failed to read Containerfile")?;
+    let mut containerfile =
+        std::fs::read_to_string(&containerfile_path).context("Failed to read Containerfile")?;
 
     let stages = find_stages(&containerfile);
     if !stages.contains(&agent.to_string()) {
@@ -102,7 +107,11 @@ pub fn run_build(runtime: Runtime, agent: &str, install_packages: &[String], no_
         let servers = crate::project_config::resolve_mcp_servers(mcp, agent);
         if !servers.is_empty() && agent == "opencode" {
             let json = crate::project_config::mcp_to_opencode_json(&servers);
-            let json_path = build_context.join("config").join("agents").join("opencode").join("opencode.json");
+            let json_path = build_context
+                .join("config")
+                .join("agents")
+                .join("opencode")
+                .join("opencode.json");
             std::fs::write(&json_path, serde_json::to_string_pretty(&json)?)?;
         }
     }
@@ -303,7 +312,11 @@ fn inject_custom_packages_stage(containerfile: &str, custom_snippet: &str) -> Re
         if line_lower.starts_with("from") && line_lower.contains(" as ") {
             // Extract stage name
             if let Some(as_pos) = line_lower.find(" as ") {
-                let stage_name = line[as_pos + 4..].trim().split_whitespace().next().unwrap_or("");
+                let stage_name = line[as_pos + 4..]
+                    .trim()
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("");
 
                 // Check if this is an agent stage (not base)
                 if stage_name != "base" && !found_agent_stage {
@@ -321,10 +334,11 @@ fn inject_custom_packages_stage(containerfile: &str, custom_snippet: &str) -> Re
                     result.push_str("\n");
 
                     // Replace "FROM base AS" with "FROM custom-packages AS"
-                    let modified_line = line.replace("FROM base AS", "FROM custom-packages AS")
-                                           .replace("FROM base as", "FROM custom-packages AS")
-                                           .replace("from base AS", "FROM custom-packages AS")
-                                           .replace("from base as", "FROM custom-packages AS");
+                    let modified_line = line
+                        .replace("FROM base AS", "FROM custom-packages AS")
+                        .replace("FROM base as", "FROM custom-packages AS")
+                        .replace("from base AS", "FROM custom-packages AS")
+                        .replace("from base as", "FROM custom-packages AS");
                     result.push_str(&modified_line);
                     result.push('\n');
                     continue;

@@ -1,5 +1,3 @@
-use anyhow::{bail, Context, Result};
-use std::process::{Command, Stdio};
 use crate::agent::AgentConfig;
 use crate::commands::mobile;
 use crate::config::load_agent_config;
@@ -7,6 +5,8 @@ use crate::container::{
     container_status, detect_runtime, find_container, hapi_container_name, start_container,
     ContainerStatus,
 };
+use anyhow::{bail, Context, Result};
+use std::process::{Command, Stdio};
 
 pub fn run(name: String, runtime_override: Option<&str>) -> Result<()> {
     let runtime = detect_runtime(runtime_override)?;
@@ -58,7 +58,10 @@ fn extract_agent_from_container(container_name: &str, session_name: &str) -> Res
         return Ok(agent.to_string());
     }
 
-    bail!("Cannot extract agent type from container name: {}", container_name);
+    bail!(
+        "Cannot extract agent type from container name: {}",
+        container_name
+    );
 }
 
 fn attach_zellij(
@@ -112,8 +115,10 @@ fn attach_zellij(
     if let Ok(ContainerStatus::Running) = container_status(runtime, &hapi_name) {
         if let Some(token) = mobile::get_cli_token(runtime, &hapi_name) {
             hapi_env_args.extend_from_slice(&[
-                "-e".to_string(), format!("CLI_API_TOKEN={}", token),
-                "-e".to_string(), "HAPI_API_URL=http://klotho-hapi:3006".to_string(),
+                "-e".to_string(),
+                format!("CLI_API_TOKEN={}", token),
+                "-e".to_string(),
+                "HAPI_API_URL=http://klotho-hapi:3006".to_string(),
             ]);
         }
     }

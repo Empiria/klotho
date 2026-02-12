@@ -2,8 +2,7 @@ use anyhow::Result;
 use owo_colors::OwoColorize;
 
 use crate::container::{
-    detect_runtime, container_status, hapi_container_name,
-    ContainerStatus, Runtime, KLOTHO_NETWORK,
+    container_status, detect_runtime, hapi_container_name, ContainerStatus, Runtime, KLOTHO_NETWORK,
 };
 
 use super::display_connection_info;
@@ -74,7 +73,14 @@ fn list_connected_sessions(runtime: Runtime) -> Result<Vec<(String, ContainerSta
     // doesn't expose a .Containers field, so we query running containers instead.
     let output = runtime
         .command()
-        .args(["ps", "-a", "--filter", &format!("network={}", KLOTHO_NETWORK), "--format", "{{.Names}}"])
+        .args([
+            "ps",
+            "-a",
+            "--filter",
+            &format!("network={}", KLOTHO_NETWORK),
+            "--format",
+            "{{.Names}}",
+        ])
         .output();
 
     let mut sessions = Vec::new();
@@ -95,7 +101,8 @@ fn list_connected_sessions(runtime: Runtime) -> Result<Vec<(String, ContainerSta
                             let session_name = &session_part[last_hyphen + 1..];
 
                             // Get the status of this container
-                            let status = container_status(runtime, container_name).unwrap_or(ContainerStatus::NotFound);
+                            let status = container_status(runtime, container_name)
+                                .unwrap_or(ContainerStatus::NotFound);
 
                             sessions.push((session_name.to_string(), status));
                         }

@@ -1,6 +1,6 @@
+use crate::container::{detect_runtime, list_containers, ContainerStatus};
 use anyhow::Result;
 use owo_colors::OwoColorize;
-use crate::container::{detect_runtime, list_containers, ContainerStatus};
 
 pub fn run(runtime_override: Option<&str>) -> Result<()> {
     let runtime = detect_runtime(runtime_override)?;

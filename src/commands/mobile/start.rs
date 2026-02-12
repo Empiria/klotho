@@ -5,9 +5,8 @@ use std::thread;
 use std::time::Duration;
 
 use crate::container::{
-    container_status, detect_runtime, ensure_network, ensure_volume,
-    hapi_container_name, hapi_volume_name, start_container, ContainerStatus,
-    KLOTHO_NETWORK,
+    container_status, detect_runtime, ensure_network, ensure_volume, hapi_container_name,
+    hapi_volume_name, start_container, ContainerStatus, KLOTHO_NETWORK,
 };
 use crate::resources;
 
@@ -110,9 +109,7 @@ pub fn run(runtime_override: Option<&str>) -> Result<()> {
 
     cmd.arg(image_name);
 
-    let create_output = cmd
-        .output()
-        .context("failed to create hapi container")?;
+    let create_output = cmd.output().context("failed to create hapi container")?;
 
     if !create_output.status.success() {
         let stderr = String::from_utf8_lossy(&create_output.stderr);
