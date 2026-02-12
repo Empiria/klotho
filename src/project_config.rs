@@ -256,6 +256,20 @@ pub struct McpConfig {
     pub opencode: HashMap<String, McpServerConfig>,
 }
 
+/// Mobile hub configuration for hapi options
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
+pub struct MobileConfig {
+    /// Disable relay connection (local-only mode)
+    #[serde(default)]
+    pub no_relay: bool,
+    /// Custom relay URL (for self-hosted relay)
+    #[serde(default)]
+    pub relay: Option<String>,
+    /// Bind to specific LAN IP (for local-only mode)
+    #[serde(default)]
+    pub bind: Option<String>,
+}
+
 /// Project metadata from [project] section
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct ProjectMeta {
@@ -282,6 +296,9 @@ pub struct KlothoConfig {
     /// Skills to install at container start
     #[serde(default)]
     pub skills: HashMap<String, SkillConfig>,
+    /// Mobile hub configuration
+    #[serde(default)]
+    pub mobile: Option<MobileConfig>,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -1515,5 +1532,90 @@ install = "cargo install other-tool"
         assert_eq!(resolved.len(), 2);
         assert!(resolved.contains_key("global-skill"));
         assert!(resolved.contains_key("agent-skill"));
+    }
+
+    #[test]
+    fn test_parse_mobile_config_no_relay() {
+        let toml_content = r#"
+[mobile]
+no_relay = true
+"#;
+        let config: KlothoConfig = toml::from_str(toml_content).unwrap();
+        let mobile = config.mobile.unwrap();
+
+        assert!(mobile.no_relay);
+        assert_eq!(mobile.relay, None);
+        assert_eq!(mobile.bind, None);
+    }
+
+    #[test]
+    fn test_parse_mobile_config_custom_relay() {
+        let toml_content = r#"
+[mobile]
+relay = "https://custom.relay.example.com"
+"#;
+        let config: KlothoConfig = toml::from_str(toml_content).unwrap();
+        let mobile = config.mobile.unwrap();
+
+        assert!(!mobile.no_relay);
+        assert_eq!(
+            mobile.relay,
+            Some("https://custom.relay.example.com".to_string())
+        );
+        assert_eq!(mobile.bind, None);
+    }
+
+    #[test]
+    fn test_parse_mobile_config_bind() {
+        let toml_content = r#"
+[mobile]
+bind = "192.168.1.100"
+"#;
+        let config: KlothoConfig = toml::from_str(toml_content).unwrap();
+        let mobile = config.mobile.unwrap();
+
+        assert!(!mobile.no_relay);
+        assert_eq!(mobile.relay, None);
+        assert_eq!(mobile.bind, Some("192.168.1.100".to_string()));
+    }
+
+    #[test]
+    fn test_parse_mobile_config_all_fields() {
+        let toml_content = r#"
+[mobile]
+no_relay = true
+relay = "https://my-relay.example.com"
+bind = "10.0.0.50"
+"#;
+        let config: KlothoConfig = toml::from_str(toml_content).unwrap();
+        let mobile = config.mobile.unwrap();
+
+        assert!(mobile.no_relay);
+        assert_eq!(
+            mobile.relay,
+            Some("https://my-relay.example.com".to_string())
+        );
+        assert_eq!(mobile.bind, Some("10.0.0.50".to_string()));
+    }
+
+    #[test]
+    fn test_parse_mobile_config_absent() {
+        let toml_content = r#"
+[project]
+agent = "claude"
+"#;
+        let config: KlothoConfig = toml::from_str(toml_content).unwrap();
+
+        // mobile section absent - should be None
+        assert!(config.mobile.is_none());
+    }
+
+    #[test]
+    fn test_mobile_config_default() {
+        let config = MobileConfig::default();
+
+        assert!(!config.no_relay);
+        assert_eq!(config.relay, None);
+        assert_eq!(config.bind, None);
     }
 }
